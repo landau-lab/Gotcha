@@ -1,4 +1,4 @@
-# GoTChA 
+# GoT-ChA 
 ## Introduction to Genotyping of Targeted loci and Chromatin Accessibility
 ### Why GoTChA?
 ### Designing a GoTChA experiment
