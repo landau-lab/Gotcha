@@ -16,8 +16,13 @@ After the single-cell emulsion is broken, a small portion of the sample is taken
 To utilize GoT-ChA, three primers need to be designed that flank the genomic region of interest. GoT-ChA_R1 (containing the partial Nextera Read1 sequence in its handle) and GoT-ChA_Rev flank the loci of interest, ideally forming an amplicon between 200-500 bps in size. GoT-ChA_nested is utilized in the hemi-nested PCR during GoT-ChA library construction, and crucially needs to bind within 50bp (inclusive of binding site) of the mutation to be covered with standard scATAC-seq sequencing parameters.
 
 ## Overview of the Gotcha R package
+The Gotcha R package is designed to provide a pipeline for end-to-end processing of the sequecing libraries generated through the GoT-ChA method. It containes functions for both data pre-processing (i.e., filtering of fastq files by base quality, split of fastqs into chunks for parallel processing) as well as noise correction (estimation of noise from empty droplets) and genotype calling. In addition, we have included functions for downstream analysis that work seemingly with the ArchR (https://www.archrproject.com) single cell ATAC-seq processing package, and allow to calculate differential motif accessibility and gene accessibility scores, as well as calculation of co-accessibility for subgroups of cells and visualization of genome tracks. 
+
 ### Data pre-processing
+
 ### Mutation calling
 ### Adding genotyping information to ArchR projects
+### Downstream analysis
 ## Testing GoT-ChA
 ### Sample data for testing the Gotcha pipeline
+Initial fastq files for the genotyping GoT-ChA library as well as metadata containing the final genotype calls are publicly available at GEO (GSE203251).
