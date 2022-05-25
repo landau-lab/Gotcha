@@ -1,3 +1,13 @@
+#' Function to filter genotyping data based on minimum number of genotyping reads detected
+#'
+#' @param archrProject ArchR project containing the output of the AddGenotypingArchr function
+#' @param total.counts.column Character vector of length one indicating the name of the column containing the total genotyping read counts after noise correction
+#' @param min.reads Minimum number of total genotyping reads required to retain the cell barcode for downstream analysis
+#' @param plot Whether to plot the distribution of total genotyping reads and the threshold as a histogram
+#' @return Archr Project with added column of logical values into the metadata
+#' @examples
+#'
+
 FilterGenotyping = function(archrProject, total.counts.column, min.reads = 100, plot = F){
 
   if(class(archrProject) != "ArchRProject"){

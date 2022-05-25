@@ -1,3 +1,15 @@
+#' Perform noise correction based on empty droplet read number distribution and add the genotype label
+#'
+#' @param archrProject ArchR project object containing the cell barcodes considered as true cells in  the metadata
+#' @param gotchaList List class object containing the paths to the GoT-ChA library outputs calculated by the MutationCalling function
+#' @param target Name of the targeted loci or gene to add as part of the column name to be added in the metadata
+#' @param percentile.use Number between 1 and 100 indicating the percentile to use as threshold to define background noise values
+#' @param genotyping.thresholds Numeric vector of length two indicating the mutant fraction thresholds to define genotype labels
+#' @param plot Logical. Whether to plot the histograms of read count distributions in empty droplets and the corresponding thresholds
+#' @return Archr Project with added genotyping columns into the metadata
+#' @examples
+#'
+
 AddGenotypingArchr = function(archrProject,
                               gotchaList,
                               samples,

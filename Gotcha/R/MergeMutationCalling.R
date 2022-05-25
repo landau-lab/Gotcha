@@ -1,3 +1,10 @@
+#' To merge the outputs from BatchMutationCalling function into a single data frame
+#'
+#' @param out Path to the fastq or filtered fastq files
+#' @return Saves a merged data frame containing all the outputs of the BatchMutationCalling function in the specified directory
+#' @examples
+#'
+
 MergeMutationCalling = function(out){
 
   out = paste0(out,"Split/Filtered/")
