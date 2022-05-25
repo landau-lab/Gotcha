@@ -58,7 +58,7 @@ This approach is currently available by appling two functions included in the Go
 We provide the functions used for downstream analysis and the corresponding documentation in the /Functions for downstream analysis/ folder. This includes DiffLMM, a function that allows intra-cluster comparisons between genotypes using linear mixture models; DiffCoAccess, a function that leverages ArchR co-accessibility calculations via Cicero to calculate per-genotype co-accessibility; and PlotDCA, a function that leverages ArchR for plotting genomic tracks displaying the co-accessibility loops in a given genomic region.
 
 ## Testing GoT-ChA
-### Sample data for testing the Gotcha pipeline
+### Data availability for testing the Gotcha pipeline
 Initial fastq files for the genotyping GoT-ChA library as well as metadata containing the final genotype calls are publicly available at GEO (GSE203251).
 
 
