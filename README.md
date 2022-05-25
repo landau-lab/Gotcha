@@ -19,6 +19,8 @@ To utilize GoT-ChA, three primers need to be designed that flank the genomic reg
 The Gotcha R package is designed to provide a pipeline for end-to-end processing of the sequecing libraries generated through the GoT-ChA method. It containes functions for both data pre-processing (i.e., filtering of fastq files by base quality, split of fastqs into chunks for parallel processing) as well as noise correction (estimation of noise from empty droplets) and genotype calling. In addition, we have included functions for downstream analysis that work seemingly with the ArchR (https://www.archrproject.com) single cell ATAC-seq processing package, and allow to calculate differential motif accessibility and gene accessibility scores, as well as calculation of co-accessibility for subgroups of cells and visualization of genome tracks. 
 
 ### Data pre-processing
+In order to pre-process the fastq files generated through GoT-ChA genotyping, we included two functions within the Gotcha R package as follows:
+1 - 
 
 ### Mutation calling
 ### Adding genotyping information to ArchR projects
