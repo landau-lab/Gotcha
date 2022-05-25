@@ -42,10 +42,17 @@ Once we have measured the abundance of wild-type and mutant reads for each cell 
 
 #### Cluster-based background noise correction and genotype assignment
 
-This approach relies on the expectation that a population of cells for which no genotyping call can be made, due to experimental constraints on capture. These cells may still have non-zero read counts for each allele, representing the level of background signal for each allele. Thus, the data will typically follow a bimodal distribution of supporting reads for either the mutated or wildtype allele. One mode reflects cells with true capture of the mutated allele and the second mode reflects cells where reads reflect background noise. For more details, see Materials and Medthods section in the [GoT-ChA](https://www.biorxiv.org/content/10.1101/2022.05.11.491515v1) preprint.
-This approach is currently available as a Python script (Gotcha/Python/)
+This approach relies on the expectation of a population of cells for which no genotyping call can be made, due to experimental constraints on capture. These cells may still have non-zero read counts for each allele, representing the level of background signal for each allele. Thus, the data will typically follow a bimodal distribution of supporting reads for either the mutated or wildtype allele. One mode reflects cells with true capture of the mutated allele and the second mode reflects cells where reads reflect background noise. For more details, see Materials and Medthods section in the [GoT-ChA](https://www.biorxiv.org/content/10.1101/2022.05.11.491515v1) preprint.
+
+This approach is currently available as a Python script in this repository (/Gotcha/Python/gotcha_labeling.py). Future versions of the Gotcha R package will implement a wrapper function to provide R to Python interface allowing to call the gotcha_labeling.py script from within the R environment using the reticulate R package.
 
 #### Empty droplet-based noise correction and genotype assignment
+The second approach to estimate the background noise present in the genotyping data, is based on leveraging the presence of empty droplets obtained in every 10X run, as has previously been done for noise correction in single cell protein expression. First, background noise is estimated for either wildtype or mutant reads independently. Given the zero-inflated distribution of genotyping reads present in empty droplets and to avoid the potential presence of outlier values (i.e. a droplet that contains a cell but was assigned as empty), we estimate the value of the background noise as that of the 99th percentile of the read number distribution for each genotype independently. Once the background noise is quantified, we proceed to subtract the value for each genotype read count from the barcodes containing real cells. In addition, cells are required to contain a minimum number of genotyping reads (>250 after background subtraction). For more details, see Materials and Medthods section in the [GoT-ChA](https://www.biorxiv.org/content/10.1101/2022.05.11.491515v1) preprint.
+This approach is currently available by appling two functions included in the Gotcha R package:
+
+1 - AddGenotyping: this function allows to estimate and substract the background noise of the wild-type and mutant read counts, and add it directly into the metadata of an ArchR project.
+
+2 - FilterGenotyping: this function generates an additional column in the ArchR project metadata containing a logical indicating if the cell barcode total genotyping read calls are above the specified threshold.
 
 ## Testing GoT-ChA
 ### Sample data for testing the Gotcha pipeline
