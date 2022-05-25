@@ -42,10 +42,10 @@ Once we have measured the abundance of wild-type and mutant reads for each cell 
 
 #### Cluster-based background noise correction and genotype assignment
 
+This approach relies on the expectation that a population of cells for which no genotyping call can be made, due to experimental constraints on capture. These cells may still have non-zero read counts for each allele, representing the level of background signal for each allele. Thus, the data will typically follow a bimodal distribution of supporting reads for either the mutated or wildtype allele. One mode reflects cells with true capture of the mutated allele and the second mode reflects cells where reads reflect background noise. For more details, see Materials and Medthods section in the [GoT-ChA](https://www.biorxiv.org/content/10.1101/2022.05.11.491515v1) preprint.
 
 #### Empty droplet-based noise correction and genotype assignment
 
-### Downstream analysis
 ## Testing GoT-ChA
 ### Sample data for testing the Gotcha pipeline
 Initial fastq files for the genotyping GoT-ChA library as well as metadata containing the final genotype calls are publicly available at GEO (GSE203251).
