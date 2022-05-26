@@ -58,6 +58,6 @@ We provide the functions used for downstream analysis and the corresponding docu
 
 ## Testing GoT-ChA
 ### Data availability for testing the Gotcha pipeline
-Initial fastq files for the genotyping GoT-ChA library as well as metadata containing the final genotype calls are publicly available at GEO (GSE203251).
+Initial fastq files for the genotyping GoT-ChA library as well as metadata containing the final genotype calls are publicly available at GEO (GSE204911).
 
 
