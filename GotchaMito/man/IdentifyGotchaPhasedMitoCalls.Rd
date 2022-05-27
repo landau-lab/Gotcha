@@ -21,7 +21,7 @@ IdentifyGotchaPhasedMitoCalls(
 \arguments{
 \item{mgatk}{RangedSummarizedExperiment object which can be generated following the pipeline in \link[mgatk]{https://github.com/caleblareau/mgatk}.}
 
-\item{genotyping_table}{Got-cha genotyping table.}
+\item{genotyping_table}{Got-cha genotyping table. MutationCall allowed values are only WT,HET,MUT or NA. Rownames should contain the cell barcodes.}
 
 \item{gene}{Name of the targeted gene of interest. It has to match the column name within the got-cha genotyping table.}
 

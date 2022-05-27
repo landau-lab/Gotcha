@@ -4,7 +4,7 @@
 \alias{MissingDataCum}
 \title{Optimize the number of variants to use in the classifier given their percentage of missing data}
 \usage{
-MissingDataCum(nsites, mitomutations)
+MissingDataCum(nsites, mitomutations, pattern = "-1")
 }
 \arguments{
 \item{nsites}{Number of sites to consider. Between 1 and the total number of sites identified as in phase.}

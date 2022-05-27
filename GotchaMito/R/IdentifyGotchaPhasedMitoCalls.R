@@ -3,14 +3,13 @@ library(tidyr)
 library(dplyr)
 library(tidymodels)
 
-
-source("/gpfs/commons/groups/landau_lab/tprieto/MiTo/scripts/variant_calling.R")
+source("R/variant_calling.R")
 
 
 #' Identify mitochondrial mutations in phase with the got-cha targeted mutation
 #'
 #' @param mgatk RangedSummarizedExperiment object which can be generated following the pipeline in \link[mgatk]{https://github.com/caleblareau/mgatk}.
-#' @param genotyping_table Got-cha genotyping table.
+#' @param genotyping_table Got-cha genotyping table. MutationCall allowed values are only WT,HET,MUT or NA. Rownames should contain the cell barcodes.
 #' @param gene Name of the targeted gene of interest. It has to match the column name within the got-cha genotyping table.
 #' @param min_cellcov_calculate_af Minimum cell coverage at a given site to generate an heteroplasmic value.
 #' @param pattern Suffix added to all the cell/sample names.

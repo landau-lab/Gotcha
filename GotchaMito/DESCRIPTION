@@ -3,7 +3,9 @@ Type: Package
 Title: Analysis of mitochondrial mutations to enhance Gotcha genotyping
 Version: 0.1.0
 Author: Tamara Prieto
-Description: Package developped to identify mitochondrial mutations in phase with the GoT-ChA targeted mutation and subsequently enhance genotyping efficiency with them
+Description: Package developped to identify mitochondrial mutations in 
+    phase with the GoT-ChA targeted mutation and subsequently enhance
+    genotyping efficiency with them
 License: `use_mit_license()`
 Encoding: UTF-8
 LazyData: true

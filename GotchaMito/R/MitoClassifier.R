@@ -1,20 +1,25 @@
-
-MitoClassifier <- function(mitomutations){
+#' Build and apply a random forest classifier using in phase mitocondrial mutations
+#'
+#' @param mitomutations Table containing mitomutations and annotations about their informativeness.
+#' @param training_prop Proportion of the data to be used for training the classifier.
+#' @return Dataframe with Original GoT-ChA genotype together with the classifier predictions.
+MitoClassifier <- function(mitomutations,
+                           training_prop=0.75,
+                           number_trees=1000L,
+                           genotypequal_threshold = 0.5,
+                           outdir="data/results/"){
 
    wholedataset <- mitomutations %>%
-     dplyr::filter(perc_filter=="pass") %>%
-     dplyr::filter(wilcox=="informative") %>%
      dplyr::select(MutationCall,OriginalWhiteListMatch,Site,Heteroplasmy) %>%
+     dplyr::mutate(OriginalWhiteListMatch=paste(OriginalWhiteListMatch,dplyr::row_number(),sep=".")) %>%
      tidyr::pivot_wider(names_from=Site,values_from=Heteroplasmy, values_fill=NA)
-     #!!!!! Select the number of variants I want to use
 
    mydata_genotyped <- wholedataset[complete.cases(wholedataset),] %>% # remove rows with missing data
      dplyr::select(-OriginalWhiteListMatch) %>%
      dplyr::filter(MutationCall!="Non-genotyped" & MutationCall!="HET") %>%
      dplyr::mutate(MutationCall=factor(MutationCall, levels=c("MUT","WT")))
 
-   # !!!!!!!!!!!!!!!!!!!!!!!
-   # take the same number of MUT than WT cells
+   # select the same number of MUT than WT cells
    number_wt <- table(mydata_genotyped$MutationCall)["WT"]
    mydata_genotyped_mut <- mydata_genotyped %>%
      dplyr::filter(MutationCall=="MUT")
@@ -25,13 +30,13 @@ MitoClassifier <- function(mitomutations){
    min_cells <- table(mydata_genotyped$MutationCall)[category_withless]
    mydata_genotyped <- rbind.data.frame(mydata_genotyped_mut[1:min_cells,],mydata_genotyped_wt[1:min_cells,])
 
-   #### Create the dataset for which I want to predict the genotypes
+   # Create the dataset for which I want to predict the genotypes
    mydata_nongenotyped <- wholedataset[complete.cases(wholedataset),] %>%
+      dplyr::mutate(MutationCall=ifelse(is.na(MutationCall),"Non-genotyped",MutationCall)) %>%
      dplyr::filter(MutationCall=="Non-genotyped")
 
-   #### Sampling
-   #!!!!!! prop 75% is the default but it can be other sizes
-   mydata_split <- initial_split(mydata_genotyped, prop = 0.75)
+   # Sampling
+   mydata_split <- initial_split(mydata_genotyped, prop = training_prop)
    recipe <- mydata_split %>%
      training() %>%
      recipe(MutationCall ~.) %>%
@@ -42,17 +47,14 @@ MitoClassifier <- function(mitomutations){
    # Performing the same operation over the training data is redundant,
    # because that data has already been prepped. To load the prepared training data into a variable, we use juice()
    training_set <- juice(recipe)
-   glimpse(training_set)
-
+   #glimpse(training_set)
 
    # Build the random forest model
-   mydata_randomforest <-  rand_forest(trees = 1000L, mode = "classification") %>%
+   mydata_randomforest <-  rand_forest(trees = number_trees, mode = "classification") %>%
      set_engine("randomForest") %>% #     set_engine("ranger") %>%
      fit(MutationCall ~ ., data = training_set) # MutationCall vs everything else (.)
 
    # Use the model to make genotyping predictions and assess accuracy  #
-
-   myPROB = 0.5
 
    PredictAndComputeAccuracy <- function(myPROB){
 
@@ -60,8 +62,8 @@ MitoClassifier <- function(mitomutations){
        predict(testing_set) %>%
        cbind.data.frame(predict(mydata_randomforest, testing_set, type="prob")) %>%
        bind_cols(testing_set) %>%
-       # !!!!! remove those cells with low assignment probability
-       dplyr::filter(`.pred_MUT` > myPROB | `.pred_WT` > myPROB) %>%
+       # remove those cells with low assignment probability
+       dplyr::filter(`.pred_MUT` >= myPROB | `.pred_WT` >= myPROB) %>%
        dplyr::select(-`.pred_MUT`,-`.pred_WT`) %>%
        metrics(truth = MutationCall, estimate = .pred_class)
 
@@ -113,53 +115,45 @@ MitoClassifier <- function(mitomutations){
 
    }
 
- #  tables_classifier <- lapply(seq(0.5,1,0.01),PredictAndComputeAccuracy)
- #  alltables_classifier <- do.call(rbind,tables_classifier)
- #
- #
- #  alltables_classifier[,7:ncol(alltables_classifier)] %>%
- #    unique() %>%
- #    ggplot(aes(as.numeric(probability_threshold),as.numeric(genotyping_accuracy_classifier), col=genotyping_efficiency_classifier)) +
- #    geom_point() +
- #    theme_classic() +
- #    labs(x="Genotype probability\nclassifier confidence",y="Genotype accuracy") +
- #    scale_color_distiller(direction = "-1") +
- #    ylim(0.97,1)
- #
- #
- #  wholedataset_withpredictions <- PredictAndComputeAccuracy(myPROB = 0.5) %>%
- #    dplyr::mutate(Predicted=ifelse(is.na(Predicted),"Non-genotyped",Predicted))
- #
- #  # barplot
- #
- #  gotcha_efficiency <- round(wholedataset_withpredictions$genotyping_efficiency_gotcha[1]*100,2)
- #  mito_efficiency <- round(wholedataset_withpredictions$genotyping_efficiency_classifier[1]*100,2)
- #
- #
- #  gotcha <- table(wholedataset_withpredictions$MutationCall)
- #  mitoclassifier <- table(wholedataset_withpredictions$Classifier)
- #
- #  barplotinput <- rbind(gotcha,mitoclassifier) %>%
- #    as.data.frame() %>%
- #    tibble::rownames_to_column(var = "technique") %>%
- #    dplyr::mutate(efficiency=ifelse(technique=="gotcha",gotcha_efficiency,mito_efficiency )) %>%
- #    tidyr::pivot_longer(cols = c("HET","MUT","Non-genotyped","WT")) %>%
- #    dplyr::rename(number=value) %>%
- #    dplyr::rename(genotype=name)  %>%
- #    #dplyr::mutate(genotype=as.factor(genotype)) %>%
- #    dplyr::mutate(genotype= gsub("HET","ambiguous",gsub("MUT","mutant",gsub("WT","wild type",gsub("Non-genotyped",NA,genotype))))) %>%
- #    dplyr::mutate(technique=gsub("gotcha","gotcha",gsub("mitoclassifier","gotcha + mito", technique)))
- #
- #
- #  barplot_ggplot <- ggplot(barplotinput, aes(technique, number, fill=genotype)) +
- #    geom_col(width = 0.5) +
- #    scale_fill_manual(values = c("darkorchid4","firebrick2","cornflowerblue"),na.value="grey") +
- #    labs(x="",y="Number of cells", fill="Genotype") +
- #    geom_text(aes(label = efficiency), size = 3, hjust = 0.5, vjust = 2, position = "stack") +
- #    theme_classic()
 
+   wholedataset_withpredictions <- PredictAndComputeAccuracy(myPROB = genotypequal_threshold) %>%
+     dplyr::mutate(Predicted=ifelse(is.na(Classifier),"Non-genotyped",Predicted)) %>%
+      dplyr::mutate(MutationCall=ifelse(is.na(MutationCall),"Non-genotyped",MutationCall))
 
-   #ggsave(barplot_ggplot,
-   #       file = paste(plotdirshare,"Barplot.gotcha.mito.genoefficiency.pdf",sep=""), dpi = 300)
+   # barplot
+   gotcha_efficiency <- round(wholedataset_withpredictions$genotyping_efficiency_gotcha[1]*100,2)
+   mito_efficiency <- round(wholedataset_withpredictions$genotyping_efficiency_classifier[1]*100,2)
+
+   gotcha <- table(wholedataset_withpredictions$MutationCall)
+   mitoclassifier <- table(wholedataset_withpredictions$Classifier)
+
+   barplotinput <- rbind(gotcha,mitoclassifier) %>%
+     as.data.frame() %>%
+     tibble::rownames_to_column(var = "technique") %>%
+     dplyr::mutate(efficiency=ifelse(technique=="gotcha",gotcha_efficiency,mito_efficiency )) %>%
+     tidyr::pivot_longer(cols = c("HET","MUT","Non-genotyped","WT")) %>%
+     dplyr::rename(number=value) %>%
+     dplyr::rename(genotype=name)  %>%
+     #dplyr::mutate(genotype=as.factor(genotype)) %>%
+     dplyr::mutate(genotype= gsub("HET","Heterozygous",gsub("MUT","Mutant",gsub("WT","Wild-type",genotype)))) %>%
+     dplyr::mutate(technique=gsub("gotcha","gotcha",gsub("mitoclassifier","gotcha + mito", technique)))
+
+   barplotinput$genotype <- factor(barplotinput$genotype, levels=c("Non-genotyped","Wild-type","Heterozygous","Mutant"))
+   barplot_ggplot <- ggplot(barplotinput, aes(technique, number, fill=genotype)) +
+     geom_col(width = 0.5) +
+     scale_fill_manual(values = c("grey","cornflowerblue","darkorchid4","firebrick2"),na.value="black") +
+     labs(x="",y="Number of cells", fill="Genotype") +
+     theme_classic()
+
+   ggsave(plot = barplot_ggplot, filename = paste(outdir,"GenotypeEfficiency.png",sep="/"))
+
+   wholedataset_withpredictions <- wholedataset_withpredictions %>%
+      dplyr::rename(Original_gotcha_calls=MutationCall) %>%
+      dplyr::rename(Classifier_predictions=Predicted) %>%
+      dplyr::rename(GotchaMito_calls=Classifier) %>%
+      dplyr::mutate(OriginalWhiteListMatch=gsub("\\..*","",OriginalWhiteListMatch)) %>%
+      dplyr::rename(Barcode=OriginalWhiteListMatch)
+
+   return(wholedataset_withpredictions)
 
 }

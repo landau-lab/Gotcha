@@ -1,0 +1,120 @@
+---
+title: "Enhancing GoT-ChA genotyping efficiency through the use of mitochondrial variants"
+author: ""
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Enhancing GoT-ChA genotyping efficiency through the use of mitochondrial variants}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  warning = F,
+  message = F,
+  comment = "#>"
+)
+```
+
+GoT-ChA can generate either single cell ATAC sequencing (scATAC-seq) or single cell ASAP-seq (sc-ASAP-seq) data with together with targeted amplification of a locus of interest, providing simultaneous chromatin accessibility and genotyping information at single cell resolution. scASAP-seq and to a lesser extent scATAC-seq generate a significant amount of mitochondrial sequences that can be used to identify mitochondrial variants. In some cases, such mitochondrial variants can be present exactly in the same population of cells which carry the mutation of interest captured by GoT-ChA. In this situation, we say the mitochondrial variant and the somatic mutation are in phase. Here we explain how to identify these mitochondrial vairants in phase with the somatic mutation of interest, and use them to impute genotypes for single cells that were not captured in the GoT-ChA genotyping library. This pipeline is based on [mgatk](https://github.com/caleblareau/mgatk/wiki).
+
+> If you have multiome samples, the pre-processing will require adjustments. The PrepMitoG script below should be modified accordingly.  
+
+For running the pipeline we need the following input files:
+
+ * **FASTQ files**. Alternatively, it is possible to use a Bam file as input
+ * **Reference genome**. Ideally with masked NuMTs. For more information:  [here](https://github.com/caleblareau/mgatk/wiki/Increasing-coverage-from-10x-processing)
+ * **Genotyping calls**. As obtained by processing the GoT-ChA gene library.
+
+## 1. Create the mgatk output
+
+```{bash, eval=F }
+PrepMitoG -r <path_cellranger_reference> \
+  -i data/preprocessing/fastqs/ \
+  -t 12 \
+  -o data/preprocessing/fastqs/test.SM4 \
+  SM4
+```
+
+
+## 2. Identify and classify mitochondrial mutations
+
+```{r, fig.show='hold',fig.cap = "Mitochondrial variant sites"}
+library(dplyr)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+source("R/IdentifyGotchaPhasedMitoCalls.R")
+source("R/FilterGotchaPhasedMitoCalls.R")
+source("R/MissingDataCum.R")
+
+
+load("data/test.RData", verbose = T)
+MitoVarsAnnotated <- IdentifyGotchaPhasedMitoCalls(mgatk=mgatk_test,
+                                  genotyping_table = genotyping_table_test,
+                                  gene = "JAK2")
+
+ggplot(MitoVarsAnnotated %>% 
+         dplyr::filter(MutationCall %in% c("WT","MUT")) %>%
+         dplyr::mutate(Heteroplasmy=Heteroplasmy*100), aes(as.factor(Site), OriginalWhiteListMatch, fill=Heteroplasmy)) +
+  geom_raster() +
+  facet_grid(MutationCall ~ wilcox+perc_filter, scales = "free", space = "free") +
+  theme(axis.text.x = element_text(angle=90, vjust = 0.5, hjust = 1),
+        axis.text.y = element_blank(),
+        axis.ticks.y  = element_blank(),
+        strip.text.x = element_text(size = 7),
+        strip.text.y = element_text(size = 3, angle = 0),
+        legend.position = "bottom") +
+  labs(x="Site", y="Cells") 
+```
+
+## 3. Select mitochondrial mutations in phase
+
+The next step selects the informative variants passing the percentage threshold selected.
+
+```{r, fig.show='hold', fig.cap = "Mitochondrial mutations in phase"}
+MitoVarsAnnotatedFiltered <- FilterGotchaPhasedMitoCalls(mitomut_table = MitoVarsAnnotated)
+
+ggplot(MitoVarsAnnotatedFiltered %>%
+         dplyr::filter(MutationCall %in% c("WT","MUT")) %>%
+         dplyr::mutate(Heteroplasmy=Heteroplasmy*100), aes(as.factor(Site), OriginalWhiteListMatch, fill=Heteroplasmy)) +
+  geom_raster() +
+  facet_grid(MutationCall ~ ., scales = "free", space = "free") +
+  theme(axis.text.x = element_text(angle=90, vjust = 0.5, hjust = 1),
+        axis.text.y = element_blank(),
+        axis.ticks.y  = element_blank(),
+        strip.text.y = element_text(size = 3, angle = 0),
+        legend.position = "bottom") +
+  labs(x="Site", y="Cells")
+
+```
+
+## 4. Maximize the number of mutations to use for the random forest classifier
+
+The function below allows to decide the number of variants that should be used to train the random forest classifier. The more informative mitochondrial variants we use, the more accurate our genotype imputation will be. However, some  sites containing mitochondrial variants along the mitochondrial genome might have a lower coverage, resulting in a fraction of the cells not showing an heteroplasmy value. Our random forest classifier does not deal with missing data, which means that if a cell does not show coverage at a single location, it will have to be discarded. By visualizing the plot below we can decide on the number of mitochondrial variants and the percentage of cells we want to use to train the classifier.
+
+```{r, fig.show='hold', fig.cap = ""}
+missing <- sapply(1:length(unique(MitoVarsAnnotatedFiltered$Site)), MissingDataCum, mitomutations=MitoVarsAnnotatedFiltered)
+
+  cbind.data.frame(Site=as.factor(unique(MitoVarsAnnotatedFiltered$Site)), missing) %>%
+    ggplot(aes(x=1:length(unique(MitoVarsAnnotatedFiltered$Site)),as.numeric(missing))) +
+    geom_point() +
+    geom_line() +
+    labs(x="",y="Cumulative % of\nmissing cells") +
+    theme_classic() +
+    scale_x_continuous(breaks=1:length(as.factor(unique(MitoVarsAnnotatedFiltered$Site))), labels=c("146T>C","146T>C\n+ 183A>G","146T>C\n+ 183A>G\n+ 195T>C")) +
+    theme(axis.text.x = element_text(angle=45, hjust = 1, size = 11))
+```
+
+## 5. Predict genotypes using mitochondrial mutations in phase
+
+Once we have decide on the number of mitochondrial variants that we want to use for our classifier we can just run the classifier.
+
+```{r, fig.show='hold', fig.cap = ""}
+source("R/MitoClassifier.R")
+NewGenotypingTable <- MitoClassifier(mitomutations = MitoVarsAnnotatedFiltered)
+knitr::kable(head(NewGenotypingTable[,c(1,2,3,6)]))
+```
+

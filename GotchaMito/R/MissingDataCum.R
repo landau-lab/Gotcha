@@ -6,7 +6,8 @@
 #' @examples
 #'
 MissingDataCum <- function(nsites,
-                           mitomutations, pattern="-1"){
+                           mitomutations,
+                           pattern="-1"){
   hetsum_percell <- mitomutations %>%
     dplyr::filter(perc_filter=="perc_pass") %>%
     dplyr::filter(wilcox=="inform.") %>%
