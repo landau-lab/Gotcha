@@ -1,3 +1,19 @@
+#' Function to measure co-accessibility in subgroups of cells of interest
+#'
+#' @param archrProject ArchR project containing the output of the AddGenotypingArchr function
+#' @param clusters Column name where the cluster labels are stored in the ArchR object metadata
+#' @param select.clusters Clusters to be included
+#' @param genotype Column name where the genotype labels are stored in the ArchR object metadata
+#' @param genotype.levels Genotypes to be included in the analysis
+#' @param peakSubset Set of peaks to include in the analysis
+#' @param maxDist Maximum distance in base pairs to consider a pair of peaks
+#' @param sample.column Column name indicating the sample identity
+#' @param reducedDims Character vector of length one indicating the reduced dimensions to use
+#' @param corCutOff Integer indicating the minimum correlation value to retain in the output
+#' @param ncores Integer indicating how many cores to use for parallel computing
+#' @return List class object containing the co-accessibility values and loops for each of the cell groups
+#' @examples
+
 DiffCoAccess = function(archrProject,
                         clusters,
                         select.clusters = NULL,

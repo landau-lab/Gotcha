@@ -1,3 +1,19 @@
+#' Function to plot co-accessibility of subgroups of cells of interest
+#'
+#' @param archrProject ArchR project containing the output of the AddGenotypingArchr function
+#' @param DCA Output obtained from the DiffCoAccess function
+#' @param coords GRanges indicating the coordinates of the region to be included in the plot
+#' @param features GRanges list class object containing features to be included in the track plot (i.e., motif sites, gene annotations, locus control regions)
+#' @param condition.column Name of the column in the ArchR metadata containing a condition to subset the cells included
+#' @param condition Levels of the condition column to be included in the analysis 
+#' @param cluster.genotype.column Name of the column in the ArchR metadata containing a cluster and treatment labels
+#' @param cluster.genotype.levels  Levels of the column in the ArchR metadata containing a cluster and treatment labels to be compared
+#' @param min.cor Integer indicating the minimum correlation value to retain a connection in the plot
+#' @param path Path to the folder where to store the plots as .pdf files
+#' @param plot Logical, whether to visualize the plots in the R studio viewer
+#' @return Prints .pdf files of the plots in the indicated path. If plot = T, it will also plot it in the R studio viewer
+#' @examples
+
 PlotDCA = function(archrProject,
                    DCA,
                    coords,

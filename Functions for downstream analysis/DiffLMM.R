@@ -1,3 +1,18 @@
+#' Function to perform differential analysis using linear mixture models
+#'
+#' @param archrProject ArchR project containing the output of the AddGenotypingArchr function
+#' @param useMatrix Character vector indicating which matrix from the ArchR project to use as input
+#' @param provided.matrix Matrix or sparse matrix class to use as input. Overrides useMatrix
+#' @param subset Character vector containing names of features to subset for differential analysis
+#' @param sample.column Character vector of length one indicating the column containing the sample identity
+#' @param cluster.column Character vector of length one indicating the column containing the cluster identity
+#' @param selected.clusters Character vector indicating the clusters to be included in the analysis
+#' @param treatment.column Character vector of length one indicating the column containing the treatments
+#' @param treatment.levels Character vector of length two indicating which treatments to compare
+#' @param ncores Integer indicating how many cores to use for parallel computing
+#' @return Data frame containing the results of the differential analysis
+#' @examples
+
 DiffLMM = function(archrProject,
                    useMatrix = "MotifMatrix",
                    provided.matrix = NULL,

@@ -1,3 +1,15 @@
+#' Function to filter the fastq files based on base quality
+#'
+#' @param out Path to the fastq
+#' @param min.quality Integer indicating the minimun base quality required to retain a read for downstream analysis
+#' @param min.bases Integer indicating the minimum number of bases below the quality threshold required to remove the read from downstream analysis
+#' @param which.read Which read to look into for quality filtering. It can be a pattern searc (i.e., R1|R2 or R1|R2|R3)
+#' @param read.region Integer vector of length two. Which part of the read to scan for low quality bases to filter on
+#' @param ncores Integer indicating the number of cores to use for parallel processing
+#' @return Archr Project with added genotyping columns into the metadata
+#' @examples
+#'
+
 FastqFiltering = function(out = "/path_to_fastqs/",
                           min.quality = 15,
                           min.bases = 1,
