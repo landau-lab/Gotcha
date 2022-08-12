@@ -1,4 +1,5 @@
 # [GoT-ChA](https://www.biorxiv.org/content/10.1101/2022.05.11.491515v1): Genotyping of Targeted loci with single-cell Chromatin Accessibility
+
 ### Installation
 The Gotcha R package is currently in beta. To install the development version:
 

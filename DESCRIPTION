@@ -1,0 +1,26 @@
+Package: Gotcha
+Type: Package
+Title: Genotyping of Targeted Loci and Chromatin Accessibility
+Version: 1.0.1
+Author: Franco Izzo and Robert Myers
+Maintainer: <fri2002@med.cornell.edu>
+Description: Package to process fastq files from Genotyping of Targeted
+  loci and Chromatin Accessibility (GoTChA) experiments and generate the 
+  cell barcode by genotype counts matrix used in downstream analysis.
+Imports:
+    dplyr,
+    parallel,
+    rslurm,
+    readr,
+    methods,
+    stats,
+    utils,
+    stringdist,
+    ShortRead,
+    Biostrings,
+    graphics,
+    reticulate,
+    lme4
+License: CC0
+Encoding: UTF-8
+LazyData: true
