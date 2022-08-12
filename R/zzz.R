@@ -31,5 +31,5 @@
 
   # Source labeling functions from GitHub
   packageStartupMessage("Sourcing python script from GitHub...")
-  reticulate::source_python(file = "https://github.com/landau-lab/Gotcha/blob/main/Gotcha/Python/gotcha_labeling.py?raw=TRUE", envir = globalenv())
+  reticulate::source_python(file = "https://github.com/landau-lab/Gotcha/blob/main/gotcha_labeling.py?raw=TRUE", envir = globalenv())
 }
