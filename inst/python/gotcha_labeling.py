@@ -62,9 +62,9 @@ def GotchaLabeling(path="", infile="", gene_id="", sample_id=""):
     for i in ["WT", "MUT"]:
         print("Noise correcting {} read counts.".format(i))
         if i=="WT":
-            typing, wt_min = noise_correct(typing,i,sample_dir)
+            typing, wt_min = noise_correct(typing,i,sample_dir,sample_id)
         else:
-            typing, mut_min = noise_correct(typing,i,sample_dir)
+            typing, mut_min = noise_correct(typing,i,sample_dir,sample_id)
     
     print("Performing quadrant genotyping.")
     typing = quadrant_genotype(typing, wt_min, mut_min)
@@ -99,7 +99,7 @@ def read_data(infile="", gene_id="", sample_id=""):
     
     return genotyping
 
-def noise_correct(typing, feature="", sample_dir=""):
+def noise_correct(typing, feature="", sample_dir="", sample_id=""):
     np.random.seed(0)
     pseudocount = 1
     X = typing[[feature+'count']]+pseudocount
