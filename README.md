@@ -6,7 +6,7 @@ The Gotcha R package is currently in beta. To install the release version:
 > devtools::install_github(repo = "landau-lab/Gotcha")
 
 ## Tutorials (coming soon)
-[How to run Gotcha in slurm clusters with parallel computing](https://github.com/landau-lab/Gotcha/blob/development/Tutorial%20-%20How%20to%20run%20Gotcha%20in%20slurm.Rmd)
+[How to run Gotcha in slurm clusters with parallel computing](file://github.com/landau-lab/Gotcha/blob/development/Tutorial%20-%20How%20to%20run%20Gotcha%20in%20slurm.Rmd)
 
 ### Why use GoT-ChA?
 Somatic mutations are crucial for cancer initiation and evolution, and have been identified across a number of healthy tissues in the human body. These mutations can disrupt normal cellular functions, leading to aberrant clonal expansions via acquired fitness advantages or skewed differentiation topologies. GoT-ChA and similar methods (e.g. GoT, TARGET-seq) aim to pair targeted genotyping with single-cell sequencing approaches in order to understand the impact of somatic mutations directly in human patient samples, in both malignant and non-malignant contexts.
