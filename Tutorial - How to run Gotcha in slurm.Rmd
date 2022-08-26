@@ -1,0 +1,79 @@
+---
+title: "Running Gotcha with parallel computing in slurm"
+output: html_notebook 
+---
+This is a tutorial for processing [GoT-ChA](https://www.biorxiv.org/content/10.1101/2022.05.11.491515v1) genotyping libraries. The Gotcha R package required for this tutorial can be downloaded [here](https://github.com/landau-lab/Gotcha/tree/main).
+
+### Use of BatchMutationCalling function
+First, we load the Gotcha R library:
+```{r}
+library(Gotcha)
+```
+To define the path to the fastq files:
+```{r}
+# Path to the folder where the .fastqs are:
+path_to_fastq = "/gpfs/commons/home/fizzo/GoTChA/raw_data/Tutorial/" 
+
+# Path where to store split and filtered .fastq files:
+path_out = "/gpfs/commons/home/fizzo/GoTChA/raw_data/Tutorial/outs/" 
+```
+
+First, we need to split the fastq files in chunks to allow for parallel processing. This can be done by running:
+```{r}
+FastqSplit(path = path_to_fastq,
+           out = path_out,
+           reads = 10000000,
+           ncores = 12)
+```
+After splitting the fastq files, a folder for each chunk will be created in the specified path.
+Next, we have to filter out those reads that contain low quality scores, particularly at the mutation site of interest:
+```{r}
+FastqFiltering(out = path_out,
+               min.quality = 15,
+               min.bases = 1,
+               which.read = "R1",
+               read.region = c(31:34),
+               ncores = 12)
+```
+Since we are running Gotcha with parallel computing in slurm, we can use the *BatchMutationCalling* function and 
+submit one cluster job per fastq chunk:
+```{r}
+BatchMutationCalling(out = path_out, 
+                     whitelist.file.path = "/gpfs/commons/home/fizzo/GoTChA/Whitelist/737K-cratac-v1.txt",
+                     wt.max.mismatch = 0, 
+                     mut.max.mismatch = 0, 
+                     keep.raw.reads = F, 
+                     reverse.complement = T, 
+                     testing = F, 
+                     which.read = "R1", 
+                     primer.sequence = "GTGTAACAGTTCCTGCATGGGCGGCATGAAC", 
+                     primed.max.mismatch = 3, 
+                     atac.barcodes = F, 
+                     atac.barcodes.file.path = NA,
+                     wt.sequence = "CGG", 
+                     mut.sequence= "CAG",
+                     mutation.start = 31,
+                     mutation.end = 34,
+                     ncores = 12, 
+                     soptions = list(output ='%x_%j.log', mem = '40g', 'cpus-per-task' = 12)
+) 
+```
+This will submit a job for each fastq chunk. Once the submitted jobs are completed, we can merge the outputs of each BatchMutationCalling job into one single data frame using the *MergeMutationOuts* function. This will generate a new folder containing a .Rdata class object that can be directly loaded into R:
+```{r}
+MergeMutationCalling(out = path_out)
+```
+To check the output from the *MutationCalling* function:
+```{r}
+load(file = paste0(path_out,"Split/Filtered/MergedOuts/outs.collapsed.Rdata"))
+```
+```{r}
+outs.collapse$Sample = "RM30"
+dset1 <- head(outs.collapse[order(rowSums(outs.collapse[,c("WTcount","MUTcount")]), decreasing = T),],10)
+knitr::kable(dset1, caption = "Gotcha counts table", format = "html", digits = 5)  %>% kable_styling()
+```
+
+We can now write a comma separated values (csv) file to use in the next steps:
+
+```{r}
+write.csv(x = outs.collapse, file = paste0(path_out,"metadata.csv"))
+```
