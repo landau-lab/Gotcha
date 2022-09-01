@@ -71,7 +71,7 @@ def GotchaLabeling(path="", infile="", gene_id="", sample_id=""):
         
     print("Computing KNN-based clusters.")
     typing = KNN_cluster(typing, wt_min, mut_min, 
-                      1.0, sample_dir)
+                      0.05, sample_dir)
     
     typing.to_csv(sample_dir+sample_id+'_genotype_labels.csv')
     print("All analysis complete!")
@@ -87,12 +87,19 @@ def read_data(infile="", gene_id="", sample_id=""):
     '''
     cell_line = pd.read_csv(infile, index_col=0, sep=",")
     #print(cell_line.head())
-    if sample_id in np.unique(cell_line['Sample'].values):
-        cell_line = cell_line.loc[cell_line['Sample']==sample_id, :]
-
-    genotyping = pd.DataFrame(index=cell_line.index)
-    genotyping['WTcount'] = cell_line[gene_id+'_WTcount']
-    genotyping['MUTcount'] = cell_line[gene_id+'_MUTcount']
+    try:
+        genotyping = pd.DataFrame(index=cell_line.index)
+        if sample_id in np.unique(cell_line['Sample'].values):
+            cell_line = cell_line.loc[cell_line['Sample']==sample_id, :]
+        genotyping['WTcount'] = cell_line[gene_id+'_WTcount']
+        genotyping['MUTcount'] = cell_line[gene_id+'_MUTcount']
+    except:
+        cell_line = cell_line.set_index("WhiteListMatch")
+        genotyping = pd.DataFrame(index=cell_line.index)
+        genotyping['WTcount'] = cell_line['WTcount']
+        genotyping['MUTcount'] = cell_line['MUTcount']
+    
+    #print(genotyping.head())
     index = genotyping[['WTcount', 'MUTcount']].dropna().index
     genotyping = genotyping.loc[index,:]
     print("Number of cells: "+str(genotyping.shape[0]))
@@ -276,15 +283,18 @@ def quadrant_genotype(typing, wt_min, mut_min):
     return typing
 
 def KNN_cluster(typing, wt_min, mut_min, 
-                      knn_window=1.0, sample_dir=""):
+                      knn_window=0.05, sample_dir=""):
     
     typing['clusters'] = typing['quadrant_class']
     
     data = typing[['transf_WT', 'transf_MUT']].values
-    indices1 = set(np.where(data[:,0]>wt_min-knn_window)[0])
-    indices1 = indices1.intersection(set(np.where(data[:,0]<=wt_min+knn_window)[0]))
-    indices2 = set(np.where(data[:,1]>mut_min-knn_window)[0])
-    indices2 = indices2.intersection(set(np.where(data[:,1]<=mut_min+knn_window)[0]))
+    range_wt = max(data[:,0])-min(data[:,0])
+    range_mut = max(data[:,0])-min(data[:,0])
+    
+    indices1 = set(np.where(data[:,0]>wt_min-knn_window*range_wt)[0])
+    indices1 = indices1.intersection(set(np.where(data[:,0]<=wt_min+knn_window*range_wt)[0]))
+    indices2 = set(np.where(data[:,1]>mut_min-knn_window*range_mut)[0])
+    indices2 = indices2.intersection(set(np.where(data[:,1]<=mut_min+knn_window*range_mut)[0]))
     indices = indices1.union(indices2)
     
     indices = np.array(list(indices))
