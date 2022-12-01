@@ -1,6 +1,5 @@
 #' Define read genotype and read counts per genotype for each cell barcode
 #' @param out Path to the fastq or filtered fastq files
-#' @param whitelist.file.path Path to the file containing the whitelist with possible cell barcodes
 #' @param wt.max.mismatch Integer indicating the number of accepted missmatches when performing pattern matching for the wild-type sequence
 #' @param mut.max.mismatch Integer indicating the number of accepted missmatches when performing pattern matching for the mutant sequence
 #' @param keep.raw.reads Logical. Whether to return the raw reads in the output file. Defaults to false
@@ -8,20 +7,19 @@
 #' @param reverse.complement Whether to take the reverse complement of the cell barcodes
 #' @param testing Logical indicating whether to sample the first 1,000 reads for testing the function
 #' @param which.read Which read to select to look for the mutation site
-#' @param atac.barcodes Logical indicating whether to only use the detected atac barcodes in the experiment as whitelist
 #' @param primer.sequence Character vector of length one indicating the primer sequence
 #' @param primed.max.mismatch  Integer indicating the maximum number of mismatches accepted when searching for the primer sequence
-#' @param atac.barcodes.file.path Path to the file containing the cell barcodes detected in the experiment
+#' @param barcodes.file.path Path to the file containing the cell barcodes detected in the experiment
 #' @param wt.sequence Character vector of length one specifying the expected wild-type sequence
 #' @param mut.sequence Character vector of length one specifying the expected mutant sequence
 #' @param mutation.start Position in which the expected wild-type or mutant sequence starts in the read
 #' @param mutation.end Position in which the expected wild-type or mutant sequence ends in the read
 #' @return Archr Project with added genotyping columns into the metadata
-#' @examples
+#'
 #'
 #'
 MutationCalling = function(out = "/path_to_filtered_fastqs/",
-                           whitelist.file.path = "/path_to_whitelist/whitelist.txt",
+						   barcodes.file.path = "/path_to_singlecell.csv",
                            wt.max.mismatch = 0,
                            mut.max.mismatch = 0,
                            keep.raw.reads = F,
@@ -29,10 +27,8 @@ MutationCalling = function(out = "/path_to_filtered_fastqs/",
                            reverse.complement = T,
                            testing = F,
                            which.read = "R1",
-                           atac.barcodes = T,
                            primer.sequence = "CCTCATCATCCTCCTTGTC",
                            primed.max.mismatch = 3,
-                           atac.barcodes.file.path = "/path_to_singlecell.csv",
                            wt.sequence =  "CGG",
                            mut.sequence = "CAG",
                            mutation.start = 31,
@@ -44,8 +40,8 @@ MutationCalling = function(out = "/path_to_filtered_fastqs/",
   WhiteListMatch <- WTcount <- MUTcount <- WT <- MUT <- NULL # To prevent non-declared global variables
   message("------- BEGIN MUTATION CALLING FUNCTION -------")
 
-  if(!file.exists(whitelist.file.path)){
-    stop(paste0("---> Whitelist is not available in ",whitelist.file.path," <---"))
+  if(!file.exists(barcodes.file.path)){
+    stop(paste0("---> barcodes is not available in ",barcodes.file.path," <---"))
   }
   fastq.files = as.list(dir(path = out, pattern = ".fastq.gz"))
   if(length(fastq.files) == 0){
@@ -118,15 +114,17 @@ MutationCalling = function(out = "/path_to_filtered_fastqs/",
   message("% of primed reads = ", round((nrow(Primed.output[[1]])/nrow(OutputBind[[1]])*100),2))
 
   # Read whitelist (either 10x whitelist or barcode list from CellRanger ATAC)
-  if(atac.barcodes == T){
-    whitelist = read.csv(atac.barcodes.file.path)
-    whitelist$barcode = substr(whitelist$barcode, 1,16)
-    whitelist = as.character(whitelist[-1,1])
-    message("------- 10X ATAC BARCODES IDENTIFIED -------")
-  }else{
-    whitelist = as.character(readLines(whitelist.file.path))
-    message("------- 10X WHITELIST IDENTIFIED -------")
+  whitelist = read.csv(barcodes.file.path)
+  if (length(names(whitelist)) == 1){
+	 whitelist = read.csv(barcodes.file.path, header=F)
+     whitelist=as.vector(whitelist)$V1
   }
+  else {
+  whitelist$barcode = substr(whitelist$barcode, 1,16)
+  whitelist = as.character(whitelist[-1,1])
+  }
+  message("------- BARCODES IDENTIFIED -------")
+
 
   # Match primed barcodes to whitelist
   if(reverse.complement){

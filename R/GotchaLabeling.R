@@ -6,7 +6,6 @@
 #' @param sample_id Sample name
 #'
 #' @return Dataframe with genotype predictions for each cell in the metadata file
-#' @examples
 #'
 #' @export
 #'

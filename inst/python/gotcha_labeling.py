@@ -78,6 +78,9 @@ def GotchaLabeling(path="", infile="", gene_id="", sample_id=""):
     time2 = timeit.default_timer()
     print("Total time to execute: {}".format(time2-time1))
     
+    print("Performing saturation analysis")
+    saturation_analysis(typing, sample_dir)
+    
     return typing
 
 def read_data(infile="", gene_id="", sample_id=""):
@@ -399,7 +402,25 @@ def KNN_cluster(typing, wt_min, mut_min,
     print(Counter(typing['genotype_pred']))
     
     return typing
+    
+def saturation_analysis(typing, sample_dir):
+    typing['WhiteListMatch']=typing.index
+    typing['total_reads']=typing['MUTcount']+typing['WTcount']
+    typing['index_start']=1
 
+    typing['index'] = typing.apply(lambda row: list(range(row['index_start'], row['total_reads']+1)), axis=1)
+    typing = typing.explode('index')
+    typing['read'] = typing['WhiteListMatch']+typing['index'].astype(str)
+
+    saturations = {np.round(i,2): len(typing.sample(int(len(typing)*i))['WhiteListMatch'].unique()) for i in np.arange(0.0,1.1,0.1)}
+
+    saturation_df = pd.DataFrame.from_dict(data=[saturations]).transpose()
+
+    plt.plot(saturation_df.index,saturation_df[0])
+    plt.savefig(sample_dir+"saturation.pdf", 
+                dpi=500, bbox_inches = "tight")
+    
+    return
 
 
 

@@ -9,7 +9,6 @@
 
 "
   )
-
   packageStartupMessage("Checking if r-reticulate-gotcha virtual environment is available...")
   if (!reticulate::virtualenv_exists(envname = "r-reticulate-gotcha")) {
     packageStartupMessage("r-reticulate-gotcha virtual environment not found, setting up environment...")
@@ -28,7 +27,7 @@
 
     # Install required python modules
     reticulate::py_install(
-      packages = c("pandas", "matplotlib", "seaborn", "numpy", "sklearn"),
+      packages = c("pandas", "matplotlib", "seaborn", "numpy", "scikit-learn"),
       python_version = "python3",
       pip = T,
       envname = "r-reticulate-gotcha"

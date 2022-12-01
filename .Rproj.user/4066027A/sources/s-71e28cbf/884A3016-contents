@@ -1,0 +1,762 @@
+---
+title: "GLM_peaks"
+output: html_document
+---
+
+```{r,warning=F}
+library(Seurat)
+library(Signac)
+#library(Gotcha)
+#library(future.apply)
+#library(future)
+#library(lmtest)
+#library(pbapply)
+#library(lme4)
+#library(parallel)
+library(stringr)
+library(ggvenn)
+library(ggpubr)
+library(tidyr)
+```
+
+# Peaks distribution
+
+```{r}
+peaks_counts = as.vector(clust0[['Peaks']]@counts[,c(1:5)])
+
+ggplot(mapping =  aes(peaks_counts))+geom_histogram(aes(y = ..density..), colour="black", fill="white", binwidth = 1)
+```
+
+# Peak distribution
+
+```{r}
+peaks5=rpeaks
+```
+
+```{r}
+xx <- diff(clust0@assays[["Peaks"]]@counts@p)
+sum(xx)
+
+n_elem = length(clust0@assays[["Peaks"]]@counts@i)
+
+zeros = n_elem - nonzeros
+
+
+nonzeros
+```
+
+#RANDOM PEAKS
+```{r, fig.width=12, fig.height=6}
+peaks5 =sample(rownames(clust0),size = 5)
+
+rpeaks=peaks5
+
+metadata = as.matrix(clust0[['Peaks']]@counts[rpeaks,])
+
+metadata = as.data.frame(t(metadata))
+
+metadata$genotype = clust0@meta.data$JAK2_Genotype
+
+metadata$nCount_Peaks = clust0@meta.data$nCount_Peaks
+
+metadata = metadata[metadata$genotype %in% c('WT','MUT'),]
+
+metadata$index = 1:nrow(metadata)
+
+
+metadata_bin = BinarizeCounts(metadata[,names(metadata)[1:5]])
+metadata_bin$genotype = metadata$genotype
+metadata_bin$treatment = ifelse(metadata_bin$genotype=='MUT',30000,0)
+metadata_bin$index = metadata$index
+metadata_bin$nCount_Peaks = metadata$nCount_Peaks
+
+
+for (r in rpeaks){
+  metadata_p = metadata_bin[,c(r,'genotype','index','nCount_Peaks','treatment')]
+  names(metadata_p) = c('peak','genotype','index','nCount_Peaks','treatment')
+  
+  plot(ggplot(metadata_p, aes(x=nCount_Peaks, y=peak, color=genotype)) + geom_point() + ylab(r)+
+         stat_smooth(method='glm', color="green", se=T,
+                method.args = list(family=binomial), formula = y ~ x) +geom_jitter(width = 0.05,height = 0.05)
+       |
+   ggplot(metadata_p, aes(x=treatment+nCount_Peaks, y=peak, color=genotype)) + geom_point() + ylab(r)+
+         stat_smooth(method='glm', color="blue", se=T,
+                method.args = list(family=binomial), formula = y ~ x)+geom_jitter(width = 0.05,height = 0.05))
+  
+  
+  glmm1 = glm(data = metadata_p, formula = peak~nCount_Peaks, family = binomial)
+
+  glmm2 = glm(data = metadata_p, formula = peak~genotype+nCount_Peaks, family = binomial)
+  
+ # print(lmtest::lrtest(glmm1,glmm2))
+  print(summary(glmm2))
+}
+```
+
+#TOP DA PEAKS
+
+```{r,fig.width=15, fig.height=8}
+#top_peaks = glm[order(glm$pval),]
+#top_peaks = as.vector(top_peaks[order(top_peaks$accessible_grp1, decreasing = T),]$Row.names[1:5])
+
+top_peaks = as.vector(glm[order(glm$pval),]$Row.names[1:5])
+
+rpeaks=top_peaks
+
+metadata = as.matrix(clust0[['Peaks']]@counts[rpeaks,])
+
+metadata = as.data.frame(t(metadata))
+
+metadata$genotype = clust0@meta.data$JAK2_Genotype
+
+metadata$nCount_Peaks = clust0@meta.data$nCount_Peaks
+
+metadata = metadata[metadata$genotype %in% c('WT','MUT'),]
+
+metadata$index = 1:nrow(metadata)
+
+
+metadata_bin = BinarizeCounts(metadata[,names(metadata)[1:5]])
+metadata_bin$genotype = factor(metadata$genotype, level=c('WT','MUT'))
+metadata_bin$treatment = ifelse(metadata_bin$genotype=='MUT',30000,0)
+metadata_bin$index = metadata$index
+metadata_bin$nCount_Peaks = metadata$nCount_Peaks
+
+for (r in rpeaks){
+  metadata_p = metadata_bin[,c(r,'genotype','index','nCount_Peaks','treatment')]
+  names(metadata_p) = c('peak','genotype','index','nCount_Peaks','treatment')
+  
+  plot(ggplot(metadata_p, aes(x=nCount_Peaks, y=peak, color=genotype)) + geom_point() + ylab(r)+
+         stat_smooth(method='glm', color="green", se=T,
+                method.args = list(family=binomial), formula = y ~ x) + 
+  geom_jitter(width = 0.05,height = 0.05)
+       |
+   ggplot(metadata_p, aes(x=treatment + nCount_Peaks, y=peak, color=genotype)) + geom_point() + ylab(r)+
+         stat_smooth(method='glm', color="blue", se=T,
+                method.args = list(family=binomial), formula = y ~ x)+ 
+  geom_jitter(width = 0.05,height = 0.05))
+  
+  glmm1 = glm(data = metadata_p, formula = peak~nCount_Peaks, family = binomial)
+
+  glmm2 = glm(data = metadata_p, formula = peak~genotype+nCount_Peaks, family = binomial)
+  
+  #print(lmtest::lrtest(glmm1,glmm2))
+  print(r)
+  print(summary(glmm2))
+  
+}
+```
+
+
+#TOP DA PEAKS - GLMER
+
+```{r,fig.width=15, fig.height=8}
+#top_peaks = glm[order(glm$pval),]
+#top_peaks = as.vector(top_peaks[order(top_peaks$accessible_grp1, decreasing = T),]$Row.names[1:5])
+
+top_peaks = as.vector(glm[order(glm$pval),]$Row.names[1:5])
+
+rpeaks=top_peaks
+
+metadata = as.matrix(clust0[['Peaks']]@counts[rpeaks,])
+
+metadata = as.data.frame(t(metadata))
+
+metadata$genotype = clust0@meta.data$JAK2_Genotype
+
+metadata$nCount_Peaks = clust0@meta.data$nCount_Peaks
+
+metadata$Sample = clust0@meta.data$Sample
+
+metadata = metadata[metadata$genotype %in% c('WT','MUT'),]
+
+metadata$index = 1:nrow(metadata)
+
+
+metadata_bin = BinarizeCounts(metadata[,names(metadata)[1:5]])
+metadata_bin$genotype = factor(metadata$genotype, level=c('WT','MUT'))
+metadata_bin$treatment = ifelse(metadata_bin$genotype=='MUT',30000,0)
+metadata_bin$index = metadata$index
+metadata_bin$nCount_Peaks = metadata$nCount_Peaks
+metadata_bin$Sample = as.factor(metadata$Sample)
+
+for (r in rpeaks){
+  metadata_p = metadata_bin[,c(r,'genotype','index','nCount_Peaks','treatment','Sample')]
+  names(metadata_p) = c('peak','genotype','index','nCount_Peaks','treatment','Sample')
+  
+  glmm1 = lme4::glmer(data = metadata_p, formula = peak~nCount_Peaks+(1|Sample), family = binomial)
+
+  glmm2 = lme4::glmer(data = metadata_p, formula = peak~nCount_Peaks+genotype+(1|Sample), family = binomial)
+  
+  #print(lmtest::lrtest(glmm1,glmm2))
+  print(r)
+  print(summary(glmm2))
+}
+
+```
+
+```{r}
+rpeaks=c('chr2-208358855-208360059')
+
+metadata = as.matrix(clust0[['Peaks']]@counts[rpeaks,])
+
+metadata = as.data.frame(t(metadata))
+
+metadata$genotype = clust0@meta.data$JAK2_Genotype
+
+metadata$nCount_Peaks = clust0@meta.data$nCount_Peaks
+
+metadata$Sample = clust0@meta.data$Sample
+
+metadata = metadata[metadata$genotype %in% c('WT','MUT'),]
+
+metadata$index = 1:nrow(metadata)
+
+metadata_bin = BinarizeCounts(metadata[,names(metadata)[1:5]])
+metadata_bin$genotype = factor(metadata$genotype, level=c('WT','MUT'))
+metadata_bin$treatment = ifelse(metadata_bin$genotype=='MUT',30000,0)
+metadata_bin$index = metadata$index
+metadata_bin$nCount_Peaks = metadata$nCount_Peaks
+metadata_bin$Sample = as.factor(metadata$Sample)
+
+table(metadata_bin$genotype,metadata_bin$V1)
+```
+
+```{r}
+
+```
+
+
+# Seurat GLM intersection
+
+```{r}
+seurat_ncount=clust0_untreated_noCH1P8_LR_ncount_WT_MUT
+seurat_ncount$Scoring= 'avg_log2FC'
+seurat_ncount$Method = 'Seurat_nCount'
+seurat_ncount$score = seurat_ncount$avg_log2FC
+seurat_ncount$pval_rank[order(seurat_ncount$p_val)] = 1:nrow(seurat_ncount)
+
+
+seurat_ncount_sample=clust0_untreated_noCH1P8_LR_ncount_sample_WT_MUT
+seurat_ncount_sample$Scoring= 'avg_log2FC'
+seurat_ncount_sample$Method = 'Seurat_nCount_Sample'
+seurat_ncount_sample$score = seurat_ncount_sample$avg_log2FC
+seurat_ncount_sample$pval_rank[order(seurat_ncount_sample$p_val)] = 1:nrow(seurat_ncount_sample)
+
+
+glm = glm_dapeaks
+rownames(glm) <- glm$Row.names
+glm$Scoring= 'log.OR'
+glm$Method= 'glm'
+glm$p_val= glm$pval
+glm$score = glm$log.OR
+glm$p_val_adj = glm$pval
+glm$avg_log2FC = glm$score
+glm$pval_rank[order(glm$p_val)] = 1:nrow(glm)
+glm = glm[order(glm$p_val),]
+
+df = rbind(rbind(seurat_ncount,seurat_ncount_sample),glm[,names(seurat_ncount)])
+
+ggplot(df, aes(x=Method, y=score, color=Scoring)) + 
+  geom_boxplot()
+```
+
+```{r}
+ggplot(df, aes(x=Method, y=p_val, color=Method)) + 
+  geom_boxplot()+NoLegend()
+```
+
+```{r, fig.width=13, fig.height=8}
+x <- list(
+  seurat_ncount = rownames(seurat_ncount),
+  seurat_ncount_sample = rownames(seurat_ncount_sample),
+  glm = glm$Row.names
+  )
+
+title = paste('seurat_ncount : n=',length(rownames(seurat_ncount)),'- seurat_ncount_sample : n=',length(rownames(seurat_ncount_sample)),'- GLM : n=',length(glm$Row.names),'\n')
+
+venn = ggvenn(
+  x, 
+  fill_color = c("#0073C2FF", "#EFC000FF",'#CD534CFF'),
+  stroke_size = 0.5, set_name_size = 4
+  )+ggtitle(title)
+
+venn
+```
+
+
+# PVAL RANKING (INTERSECTION n=2000)
+```{r}
+intersect_genes = intersect(rownames(seurat_ncount),glm$Row.names)
+
+s1 = seurat_ncount[rownames(seurat_ncount) %in% intersect_genes,]
+s2 = seurat_ncount_sample[rownames(seurat_ncount_sample) %in% intersect_genes,]
+glm_i = glm[glm$Row.names %in% intersect_genes,names(s1)]
+
+s1$peaks = rownames(s1)
+s2$peaks = rownames(s2)
+glm_i$peaks = rownames(glm_i)
+
+s1$p_val_rank_s1 = s1$pval_rank
+s2$p_val_rank_s2 = s2$pval_rank
+glm_i$p_val_rank_glm = glm_i$pval_rank
+
+
+dfm = merge(s1,s2, by='row.names')
+rownames(dfm)=dfm$Row.names
+dfm$Row.names=NULL
+df_rank = merge(dfm, glm_i, by='row.names')
+rownames(df_rank) = df_rank$Row.names
+
+ggplot(mapping = aes(x = df_rank$p_val_rank_s1, y = df_rank$p_val_rank_s2)) + 
+  geom_point() +xlab('seurat_ncount pval_rank')+ylab('seurat_ncount_sample pval_rank')+ stat_cor(method = "pearson", label.y = 2500)+ stat_cor(method = "spearman", cor.coef.name = 'rho',label.y = 2000)
+
+ggplot(mapping = aes(x = df_rank$p_val_rank_glm, y = df_rank$p_val_rank_s1)) + 
+  geom_point() +xlab('glm pval_rank')+ylab('seurat_ncount pval_rank')+ stat_cor(method = "pearson", label.y = 3100)+ stat_cor(method = "spearman", cor.coef.name = 'rho',label.y = 2900)
+
+ggplot(mapping = aes(x = df_rank$p_val_rank_glm, y = df_rank$p_val_rank_s2)) + 
+  geom_point() +xlab('glm pval_rank')+ylab('seurat_ncount_sample pval_rank')+ stat_cor(method = "pearson", label.y = 3200)+ stat_cor(method = "spearman", cor.coef.name = 'rho',label.y = 2900)
+
+
+```
+
+```{r}
+s1_pval_nb = length(seurat_ncount$p_val)
+s2_pval_nb = length(seurat_ncount_sample$p_val)
+glm_pval_nb = length(glm$pval)
+
+df_rank$p_val_rank_s1_norm = df_rank$p_val_rank_s1/s1_pval_nb
+df_rank$p_val_rank_s2_norm = df_rank$p_val_rank_s2/s2_pval_nb
+df_rank$p_val_rank_glm_norm = df_rank$p_val_rank_glm/glm_pval_nb
+
+ggplot(mapping = aes(x = df_rank$p_val_rank_s1_norm, y = df_rank$p_val_rank_s2_norm)) + 
+  geom_point() +xlab('seurat_ncount pval_rank')+ylab('seurat_n_count_sample pval_rank norm')
+
+ggplot(mapping = aes(x = df_rank$p_val_rank_glm_norm, y = df_rank$p_val_rank_s1_norm)) + 
+  geom_point() +xlab('glm pval_rank norm')+ylab('seurat_ncount pval_rank norm')
+
+ggplot(mapping = aes(x = df_rank$p_val_rank_glm_norm, y = df_rank$p_val_rank_s2_norm)) + 
+  geom_point() +xlab('glm pval_rank norm')+ylab('seurat_ncount_sample pval_rank norm')
+
+```
+
+
+```{r}
+glm = glm %>% mutate(logOR_range = case_when(
+  score >=-1 & score < 0 ~ '-1<log.OR<0',
+  score <  0 ~ '<0',
+  score >= 0 & score < 1 ~ '0<log.OR<1',
+  score >= 1 & score <= 2 ~ '1<log.OR<2',
+  score >= 2 & score <= 3 ~ '2<log.OR<3',
+  score >= 3  ~ '>3',
+  
+  TRUE ~ "undetermined"
+))
+
+
+glm$accessible_cells = rowSums(BinarizeCounts(clust0[['Peaks']]@counts[rownames(glm),]))
+
+ggplot(mapping = aes(y = glm$accessible_cells, x = glm$log.OR, color=glm$logOR_range)) + 
+  geom_point() +ylab('# of accessible cells')+xlab('glm log.OR')
+
+
+```
+
+```{r}
+
+dfi = rbind(rbind(s1[-11],s2[-11]),glm_i[-11])
+
+qplot(sample = pval_rank, data = dfi, color=Method)+ scale_shape_manual(values=c(1,17,19))
+```
+
+
+#TOP PEAKS VARIANCE ACCESSIBILITY
+
+```{r}
+library(matrixStats)
+
+std_peak_accessibility = as.data.frame(rowSds(x=as.matrix(clust0[['Peaks']]@counts)))
+
+rownames(std_peak_accessibility) = rownames(clust0)
+
+names(std_peak_accessibility) = c('std_peak_accessibility')
+
+
+top100 = rbind(rbind(s1[1:1000,-11],s2[1:1000,-11]),glm_i[1:1000,-11])
+
+std_peak_acc_linked = c()
+for (x in top100$peaks){
+  
+  peak_std =  std_peak_accessibility[x,'std_peak_accessibility']
+  
+  std_peak_acc_linked = c(std_peak_acc_linked,peak_std)
+}
+
+
+top100$std_peak_accessibility = std_peak_acc_linked
+
+ggplot(top100, aes(x=Method, y=std_peak_accessibility, color=top100$Method)) + 
+  geom_boxplot()
+
+```
+
+
+```{r}
+dfi
+
+std_peak_accessibility$peaks = rownames(std_peak_accessibility)
+
+std_peak_accessibility = std_peak_accessibility[rownames(std_peak_accessibility) %in% rownames(dfi),]
+
+library(plyr)
+
+dfi$peaks = rownames(dfi)
+
+```
+
+```{r}
+sum(rownames(dfi) %in% std_peak_accessibility$peaks)
+```
+
+
+```{r}
+std_peak_acc_linked = c()
+for (x in rownames(dfi)){
+  
+  peak_std =  std_peak_accessibility[x,'std_peak_accessibility']
+  
+  std_peak_acc_linked = c(std_peak_acc_linked,peak_std)
+}
+
+dfi$std_peak_accessibility = std_peak_acc_linked
+
+ggplot(dfi, aes(x=Method, y=std_peak_accessibility)) + 
+  geom_boxplot()
+
+```
+
+
+
+```{r, fig.width=8, fig.height=3}
+
+clust0[['Peaks']]@data = BinarizeCounts(clust0[['Peaks']]@counts)
+
+
+VlnPlot(clust0, slot = 'counts', features = glm_dapeaks[order(glm_dapeaks$log.OR, decreasing = T),]$Row.names[1:3])
+VlnPlot(clust0, slot = 'data', features = glm_dapeaks[order(glm_dapeaks$log.OR, decreasing = T),]$Row.names[1:3])
+
+```
+
+
+```{r}
+ggplot(mapping = aes(x = dfi$pct.1, y = dfi$pct.2, color=dfi$Method)) + 
+  geom_point() +xlab('GLM_RandomEffect')+ylab('Seurat_nCount')+ stat_cor(method = "pearson", label.y = 0.80)#+ stat_cor(method = "spearman", cor.coef.name = 'rho',label.y = 0.75)
+```
+
+
+
+```{r, fig.height=6,fig.width=20}
+
+df_glm = df[df$Method=='glm',]
+
+
+df_glm = df_glm %>% mutate(logOR_range = case_when(
+  score <  0 ~ '<0',
+  score >= 0 & score < 1 ~ '0<log.OR<1',
+  score >= 1 & score <= 2 ~ '1<log.OR<2',
+  score >= 2 & score <= 3 ~ '2<log.OR<3',
+  score >= 3  ~ '>3',
+  
+  TRUE ~ "undetermined"
+))
+
+ggplot(mapping = aes(x = df_glm$pct.1, y = df_glm$pct.2, color=df_glm$logOR_range)) + 
+  geom_point() | ggplot(mapping = aes(x = df_glm$pct.1, y = df_glm$pct.2, color=df_glm$score)) + 
+  geom_point()
+
+ggplot(mapping = aes(x = df_glm$score, y = df_glm$p_val, color=abs(df_glm$score))) + 
+  geom_point()
+```
+
+
+```{r}
+dapeaks = dapeaks %>% mutate(significance = case_when(
+  pval <  0.05 & log.OR > 1 ~ 'UP in MUT',
+  pval <  0.05 & log.OR < -1 ~ 'UP in WT',
+  pval >= 0.05  ~ 'Non-Significant',
+  TRUE ~ "Non-DA"
+))
+
+
+cbp1 <- c("#999999","#999999","#56B4E9", "#D55E00", "#CC79A7")
+
+
+ggplot(mapping = aes(x = dapeaks$log.OR, y = -log(dapeaks$pval, base = 10), color=dapeaks$significance)) + 
+  geom_point() + ggplot2::geom_hline(yintercept = -log(0.05,base=10))+ scale_colour_manual(values=cbp1)
+
+```
+
+```{r}
+dapeaks_sig = dapeaks[dapeaks$significance=='UP in MUT',]
+
+ggplot(mapping = aes(x = dapeaks_sig$pct.1, y = dapeaks_sig$pct.2, color=dapeaks_sig$log.OR)) + 
+  geom_point() 
+```
+
+```{r}
+quantile(dapeaks$accessible_grp1)
+
+dapeaks_mincells = dapeaks[dapeaks$accessible_grp1>10 & dapeaks$accessible_grp2>10, ]
+
+ggplot(mapping = aes(x = dapeaks_mincells$log.OR, y = -log(dapeaks_mincells$pval, base = 10), color=dapeaks_mincells$significance)) + 
+  geom_point() + ggplot2::geom_hline(yintercept = -log(0.05,base=10))+ scale_colour_manual(values=cbp1)
+
+
+ggplot(mapping = aes(x = dapeaks_mincells$pct.1, y = dapeaks_mincells$pct.2, color=dapeaks_mincells$log.OR)) + 
+  geom_point() 
+
+```
+
+
+```{r}
+x <- list(
+top20.s1 = seurat_ncount[order(seurat_ncount$avg_log2FC, decreasing = F),]$peak[1:20],
+top20.s2 = rownames(seurat_ncount_sample[order(seurat_ncount_sample$avg_log2FC, decreasing = F),])[1:20],
+top20.glm = glm[order(glm$log.OR, decreasing = T),]$Row.names[1:20]
+  )
+
+title = 'TOP 20 - DIFFERENTIAL ACCESSIBLE PEAKS IN MUT'
+
+ggvenn(
+  x,
+  fill_color = c("#0073C2FF", "#EFC000FF",'#CD534CFF'),
+  stroke_size = 0.5, set_name_size = 4
+  )+ggtitle(title)
+
+
+```
+
+```{r}
+View(data.frame(top20.s1=top20.s1,top20.glm=top20.glm))
+```
+
+
+```{r}
+seurat_ncount$peak = rownames(seurat_ncount) 
+seurat_ncount_sample$peak = rownames(seurat_ncount_sample) 
+glm$peak = glm$Row.names
+
+seurat_ncount = merge(seurat_ncount, links_peaks[,c('peak','gene','zscore','score')],by='peak') 
+seurat_ncount_sample = merge(seurat_ncount_sample, links_peaks[,c('peak','gene','zscore','score')],by='peak') 
+glm = merge(glm, links_peaks[,c('peak','gene','zscore','score')],by='peak') 
+
+```
+
+```{r}
+x <- list(
+top20.s1 = seurat_ncount[order(seurat_ncount$avg_log2FC, decreasing = F),]$gene[1:20],
+top20.s2 = seurat_ncount_sample[order(seurat_ncount_sample$avg_log2FC, decreasing = F),]$gene[1:20],
+top20.glm = glm[order(glm$log.OR, decreasing = T),]$gene[1:20]
+  )
+
+title = 'TOP 20 - DIFFERENTIAL ACCESSIBLE PEAKS LINKED TO GENE IN MUT'
+
+ggvenn(
+  x, 
+  fill_color = c("#0073C2FF", "#EFC000FF",'#CD534CFF'),
+  stroke_size = 0.5, set_name_size = 4
+  )+ggtitle(title)
+
+
+
+View(data.frame(top20.s1=top20.s1,top20.glm=top20.glm))
+
+```
+
+```{r, fig.width=10}
+glm_dapeaks = glm[order(glm$log.OR, decreasing = T),]
+rownames(glm_dapeaks)=ncol(1:length(glm_dapeaks))
+glm_dapeaks=glm_dapeaks[1:20,]
+
+ggplot(data=glm_dapeaks,mapping = aes(x = zscore , y = score.y, label = gene)) + 
+  xlab('zscore')+ylab('score')+geom_text(check_overlap = T)+ggtitle('Differentially Accessible Peaks Linked to Genes in Untreated Myelofibrosis samples')
+```
+
+```{r,fig.width=10}
+seurat_dapeaks = seurat_ncount[order(seurat_ncount$avg_log2FC, decreasing = F),]
+rownames(seurat_dapeaks)=ncol(1:length(seurat_dapeaks))
+seurat_dapeaks=seurat_dapeaks[1:40,]
+
+ggplot(data=seurat_dapeaks,mapping = aes(x = zscore , y = score.y, label = gene)) + 
+  xlab('zscore')+ylab('score')+geom_text(check_overlap = T)+ggtitle('Differentially Accessible Peaks Linked to Genes in Untreated Myelofibrosis samples - Seurat 40 peaks')
+```
+
+```{r}
+mut_peaks=glm[glm$log.OR>1,]$peak
+
+#saveRDS(links,'links_peaks.Rds')
+links_mut = links_peaks[links_peaks$peak %in% mut_peaks,]
+
+links_mut
+```
+
+```{r}
+ggplot(data = links_mut, mapping = aes(x = links_mut$zscore , y = links_mut$score, label = links_mut$gene)) + 
+  xlab('zscore')+ylab('score')+geom_text(check_overlap = T)+ggtitle('Differentially Accessible Peaks Linked to Genes in Untreated Myelofibrosis samples')
+```
+
+
+
+```{r}
+clust0_wtmut = subset(clust0, subset=JAK2_Genotype %in% c('WT','MUT'))
+clust0_wtmut$JAK2_Genotype <- factor(clust0_wtmut$JAK2_Genotype, levels = c("WT","MUT"))
+
+#top10=rownames(df3[order(df3$log.OR, decreasing = T),])[1:10]
+top10_glm = dfc[order(dfc$log.OR, decreasing = T),]$peak[1:10]
+
+for (i in top10_glm){
+ plot(FeaturePlot(clust0_wtmut, features = i, split.by = 'JAK2_Genotype', order=T ,ncol = 2) )
+}
+```
+
+```{r, fig.width=20, fig.height=6}
+library(ggpubr)
+clust0_wt = subset(clust0_wtmut, subset=JAK2_Genotype =='WT')
+clust0_mut = subset(clust0_wtmut, subset=JAK2_Genotype =='MUT')
+
+
+
+
+
+for (i in top10_glm){
+  p1=suppressWarnings(FeaturePlot(clust0_wt, features = i, split.by = 'Sample', order=T)
+                      )
+ 
+  p2=suppressWarnings(FeaturePlot(clust0_mut, features = i, split.by = 'Sample', order=T))
+
+  plot(ggarrange(p1,p2,ncol = 1)+ggtitle(label = paste0(i,' - WT (top) MUT (bottom)')))
+}
+```
+
+
+```{r}
+clust = clust0_wtmut
+
+clust@meta.data[colnames(clust)[1],]$JAK2_Genotype == 'MUT'
+
+
+length(colnames(clust))
+length(rownames(clust@meta.data))
+
+cellnames = ifelse(clust@meta.data$JAK2_Genotype=='MUT', paste0('MUT_',colnames(clust)), paste0('WT_',colnames(clust)))
+
+
+for (x in rownames(clust)[1:1000]){
+  peak = clust0_wtmut[['Peaks']]@counts[x,]
+  names(peak) = cellnames
+  
+  x = peak[order(factor(names(peak)),decreasing = T)]
+  
+  plot(as.vector(x))
+}
+```
+
+
+```{r}
+metadata = clust0@meta.data
+m = clust0@assays[["Peaks"]]@counts
+sample.column=c('Sample')
+cluster.column=c('seurat_clusters')
+selected.clusters=c('0')
+treatment.column=c('JAK2_Genotype')
+treatment.levels=c('WT','MUT')
+fixed.effect=c('nCount_ATAC')
+random.effect=c('Sample')
+
+
+
+x='chr1-9986-10434'
+dev = as.vector(t(m[x,]))
+    names(dev) = colnames(m)
+    temp = metadata
+
+    temp = temp[,c(c(sample.column, cluster.column, treatment.column),fixed.effect, random.effect)]
+    temp[,x] = dev[rownames(temp)]
+    temp = temp[temp[,treatment.column] %in% treatment.levels,]
+    temp = temp[temp[,cluster.column] %in% selected.clusters,]
+    temp = temp[complete.cases(temp),]
+
+    temp = as.data.frame(temp)
+
+    names(temp)[1] = 'Sample'
+    names(temp)[3] = 'treatment'
+    names(temp)[length(names(temp))] = 'peaks'
+
+    temp$peaks = as.factor(temp$peaks)
+    temp$treatment = as.factor(temp$treatment)
+    temp$Sample = as.factor(temp$Sample)
+    temp[, fixed.effect] = (temp[, fixed.effect] - mean(temp[, fixed.effect])) / sd(temp[, fixed.effect])
+    
+
+    
+    fmla1 <- as.formula(object = paste("peaks ~ treatment +",
+                                       paste(fixed.effect, collapse = "+"),
+                                       '+',
+                                       paste('(1|',random.effect,')', collapse = "+")
+    ))
+
+    fmla2 <- as.formula(object = paste("peaks ~ ",
+                                       paste(fixed.effect, collapse = "+"),
+                                       '+',
+                                       paste('(1|',random.effect,')', collapse = "+")
+    ))
+
+    glmm1 = glmer(data = temp, formula = fmla1, family = binomial)
+
+    glmm2 = glmer(data = temp, formula = fmla2, family = binomial)
+    
+
+p(temp$peaks)
+plot(glmm1@frame)
+#plot logistic regression curve
+plot(vs ~ hp, data=mtcars, col="steelblue")
+lines(vs ~ hp, newdata, lwd=2)
+
+
+ggplot(temp, aes(x=Sample, y=peaks)) + 
+  geom_point(alpha=.5) +
+  stat_smooth(method="glm", se=FALSE, method.args = list(family=binomial))
+
+
+
+summary(glmm1)
+```
+
+```{r}
+glm_dapeaks
+```
+
+
+
+```{r, fig.width=8, fig.height=4}
+
+features =glm[order(glm$log.OR, decreasing = T),'Row.names'][1:3]
+
+clust0_wtmut = subset(clust0, subset=JAK2_Genotype %in% c('WT','MUT'))
+clust0_wtmut$JAK2_Genotype <- factor(clust0_wtmut$JAK2_Genotype, levels = c("WT","MUT"))
+
+
+
+for (i in features){
+  plot(FeaturePlot(clust0_wtmut, features = features, order=T, split.by='JAK2_Genotype'))
+}
+
+```
+
+```{r, fig.height=14,fig.width=15}
+features =glm[order(glm$log.OR, decreasing = T),'Row.names'][1:10]
+
+clust0_wtmut[['Peaks']]@data=BinarizeCounts(clust0_wtmut[['Peaks']]@counts)
+
+suppressWarnings(VlnPlot(clust0_wtmut, features = features, split.by = 'JAK2_Genotype', group.by = 'Sample',slot = 'data'))
+```

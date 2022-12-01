@@ -10,7 +10,7 @@
 #' @param treatment.levels Character vector of length two indicating which treatments to compare
 #' @param ncores Integer indicating how many cores to use for parallel computing
 #' @return Data frame containing the results of the differential analysis
-#' @examples
+#'
 
 DiffLMM = function(metadata,
                    provided.matrix,
