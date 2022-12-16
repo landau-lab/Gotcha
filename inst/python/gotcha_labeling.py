@@ -20,8 +20,8 @@ from sklearn.neighbors import KernelDensity
 from numpy.polynomial.polynomial import Polynomial
 from numpy.polynomial.polynomial import polyfit
 from scipy.optimize import minimize
-#from scipy.signal import savgol_filter
-#from scipy.signal import find_peaks
+from scipy.signal import savgol_filter
+from scipy.signal import find_peaks
 from scipy.integrate import quad
 from collections import Counter
 #from sklearn.metrics.pairwise import euclidean_distances
@@ -71,7 +71,7 @@ def GotchaLabeling(path="", infile="", gene_id="", sample_id=""):
         
     print("Computing KNN-based clusters.")
     typing = KNN_cluster(typing, wt_min, mut_min, 
-                      0.05, sample_dir)
+                      5, sample_dir)
     
     typing.to_csv(sample_dir+sample_id+'_genotype_labels.csv')
     print("All analysis complete!")
@@ -92,6 +92,7 @@ def read_data(infile="", gene_id="", sample_id=""):
     #print(cell_line.head())
     try:
         genotyping = pd.DataFrame(index=cell_line.index)
+        cell_line['Sample'] = cell_line['Sample'].astype(str)
         if sample_id in np.unique(cell_line['Sample'].values):
             cell_line = cell_line.loc[cell_line['Sample']==sample_id, :]
         genotyping['WTcount'] = cell_line[gene_id+'_WTcount']
@@ -128,7 +129,7 @@ def noise_correct(typing, feature="", sample_dir="", sample_id=""):
     plt.show()
     plt.clf()
         
-    bw = 0.1
+    bw = 0.05#0.1
     
     kde = KernelDensity(bandwidth=bw)#kernel='exponential')
     kde.fit(typing['transf_{}'.format(feature)].values.reshape(-1, 1))
@@ -151,28 +152,59 @@ def noise_correct(typing, feature="", sample_dir="", sample_id=""):
     def kde_func(x):
         return np.exp(kde.score_samples(x.reshape(1, -1))[0])
     
-    plt.plot(kde_x, np.log(kde_test), color='red')
+    '''plt.plot(kde_x, np.log(kde_test), color='red')
     plt.title("{} (all drops)".format(sample_id))
     plt.ylabel("Log-Probability")
     plt.xlabel("Log(WTcounts)")
     plt.show()
-    plt.clf()
+    plt.clf()'''
     
     kde_smooth2 = kde_test#np.log(kde_test)
     #kde_smooth2 = savgol_filter(kde_smooth2, 1001, 3)#, mode='constant', cval=-np.inf)
-    plt.plot(kde_x, kde_smooth2, color='red')
+    '''plt.plot(kde_x, kde_smooth2, color='red')
     plt.show()
-    plt.clf()
+    plt.clf()'''
     
-    fit = polyfit(kde_x, kde_smooth2, 12)
+    '''fit = polyfit(kde_x, kde_smooth2, 15)
     poly = Polynomial(fit)
     poly_y = poly(kde_x)
     plt.plot(kde_x, poly_y, color='red')
     plt.show()
-    plt.clf()
+    plt.clf()'''
     
-    mid = (max(kde_x)-min(kde_x))/2
-    print(mid)
+    #mid = (max(kde_x)-min(kde_x))/2
+    #print(mid)
+    
+    '''kde_smooth3 = savgol_filter(kde_test, 1501, 5)#, mode='constant', cval=-np.inf)
+    plt.plot(kde_x, kde_smooth3, color='red')
+    plt.show()
+    plt.clf()'''
+    
+    print("Peaks:")
+    peaks, properties = find_peaks(kde_test, width=(None,None), rel_height=0.5)
+    print(kde_x[peaks])
+    print(properties)
+    
+    modes = np.argsort(properties['widths'])[-2:]
+    modes = peaks[modes]
+    #modes = kde_x[modes]
+    
+    print(modes)
+    print(kde_x[modes])
+    #mid = np.mean(modes)
+    modes = np.sort(modes)
+    
+    new_range = kde_test[modes[0]:modes[1]]
+    #print(new_range)
+    new_min = np.argmin(new_range) + modes[0]
+    new_min = kde_x[new_min]
+    print(new_min)
+    
+    #mid = np.mean(np.percentile(logged_counts, [25,75]))
+    #mid = np.percentile(logged_counts, 0.5)
+    #print(mid)
+    
+    '''
     result = minimize(poly, x0=np.array([mid]), 
                         options={'disp':False}, bounds=((min(kde_x), max(kde_x)),),
                      method='Nelder-Mead')
@@ -195,6 +227,7 @@ def noise_correct(typing, feature="", sample_dir="", sample_id=""):
         zero_counts = zero_counts[zero_counts==0].index
 
         new_min = np.percentile(typing.loc[zero_counts,'transf_{}'.format(feature)], 99.99)
+    '''
 
     noise_values = logged_counts
     noise_values = noise_values[noise_values<new_min]
@@ -286,14 +319,15 @@ def quadrant_genotype(typing, wt_min, mut_min):
     return typing
 
 def KNN_cluster(typing, wt_min, mut_min, 
-                      knn_window=0.05, sample_dir=""):
+                      knn_window=5, sample_dir=""):
     
     typing['clusters'] = typing['quadrant_class']
     
     data = typing[['transf_WT', 'transf_MUT']].values
+    
+    '''
     range_wt = max(data[:,0])-min(data[:,0])
     range_mut = max(data[:,0])-min(data[:,0])
-    
     indices1 = set(np.where(data[:,0]>wt_min-knn_window*range_wt)[0])
     indices1 = indices1.intersection(set(np.where(data[:,0]<=wt_min+knn_window*range_wt)[0]))
     indices2 = set(np.where(data[:,1]>mut_min-knn_window*range_mut)[0])
@@ -302,6 +336,49 @@ def KNN_cluster(typing, wt_min, mut_min,
     
     indices = np.array(list(indices))
     indices = typing.index[indices]
+    '''
+    
+    #knn_window = 5
+    
+    print("2D Density plot")
+    x = data[:,0]
+    y = data[:,1]
+    
+    #print(knn_window)
+    
+    wt_percentile = (len(x[x<wt_min])/len(x))*100
+    print("WT quadrant percentile: "+str(wt_percentile))
+    #print(np.percentile(x, wt_percentile-knn_window))
+    #print(np.percentile(x, wt_percentile+knn_window))
+    
+    mut_percentile = (len(y[y<mut_min])/len(y))*100
+    print("MUT quadrant percentile: "+str(mut_percentile))
+    #print(np.percentile(y, mut_percentile-knn_window))
+    #print(np.percentile(y, mut_percentile+knn_window))
+    
+    indices1 = set(np.where(x>=np.percentile(x, wt_percentile-knn_window))[0])
+    indices1 = indices1.intersection(set(np.where(x<np.percentile(x, wt_percentile+knn_window))[0]))
+    indices2 = set(np.where(y>=np.percentile(y, mut_percentile-knn_window))[0])
+    indices2 = indices2.intersection(set(np.where(y<np.percentile(y, mut_percentile+knn_window))[0]))
+    indices = indices1.union(indices2)
+    
+    indices = np.array(list(indices))
+    indices = typing.index[indices]
+    
+    xy = np.vstack([x,y])
+    z = gaussian_kde(xy, bw_method=0.1)(xy)#, bw_method=bw
+    
+    fig, ax = plt.subplots()
+    ax.scatter(x, y, c=z, s=5, cmap='plasma')#, edgecolor='')
+    plt.axhline(y=mut_min, color='r', linestyle='-')
+    plt.axvline(x=wt_min, color='r', linestyle='-')
+    #ax.colorbar()
+    plt.title('Density')
+    plt.xlabel('WT Z-scores')
+    plt.ylabel('MUT Z-scores')
+    plt.savefig(sample_dir+"total_density.pdf", 
+                dpi=500, bbox_inches = "tight")
+    plt.show()
     
     typing.loc[indices,'clusters'] = -1
     
@@ -316,7 +393,7 @@ def KNN_cluster(typing, wt_min, mut_min,
         try:
             plt.scatter(data[np.where(typing['clusters'].astype(str)==label)[0],0], 
                         data[np.where(typing['clusters'].astype(str)==label)[0],1], label=label, 
-                        s=7, color=gen_cmap[label])
+                        s=5, color=gen_cmap[label])
         except:
             pass
     handles, labels = plt.gca().get_legend_handles_labels()
@@ -352,7 +429,7 @@ def KNN_cluster(typing, wt_min, mut_min,
         try:
             plt.scatter(data[np.where(typing['genotype_pred'].astype(str)==label)[0],0], 
                         data[np.where(typing['genotype_pred'].astype(str)==label)[0],1], label=label,
-                       s=7, color=gen_cmap[label])
+                       s=5, color=gen_cmap[label])
         except:
             pass
     plt.legend()
@@ -373,7 +450,7 @@ def KNN_cluster(typing, wt_min, mut_min,
         try:
             plt.scatter(data[np.where(typing['quadrant_class']==label)[0],0], 
                         data[np.where(typing['quadrant_class']==label)[0],1], label=label,
-                       s=7, color=gen_cmap[label])
+                       s=5, color=gen_cmap[label])
         except:
             pass
     plt.title('Quadrant Genotype')
@@ -404,8 +481,10 @@ def KNN_cluster(typing, wt_min, mut_min,
     return typing
     
 def saturation_analysis(typing, sample_dir):
+    n_cells = typing.shape[0]
     typing['WhiteListMatch']=typing.index
     typing['total_reads']=typing['MUTcount']+typing['WTcount']
+    typing['total_reads']=typing['total_reads'].astype(int)
     typing['index_start']=1
 
     typing['index'] = typing.apply(lambda row: list(range(row['index_start'], row['total_reads']+1)), axis=1)
@@ -415,12 +494,14 @@ def saturation_analysis(typing, sample_dir):
     saturations = {np.round(i,2): len(typing.sample(int(len(typing)*i))['WhiteListMatch'].unique()) for i in np.arange(0.0,1.1,0.1)}
 
     saturation_df = pd.DataFrame.from_dict(data=[saturations]).transpose()
-
+    
+    saturation_df = saturation_df/n_cells
+    
     plt.plot(saturation_df.index,saturation_df[0])
     plt.savefig(sample_dir+"saturation.pdf", 
                 dpi=500, bbox_inches = "tight")
     
-    return
+    return None
 
 
 
