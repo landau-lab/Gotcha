@@ -62,9 +62,15 @@ def GotchaLabeling(path="", infile="", gene_id="", sample_id=""):
     for i in ["WT", "MUT"]:
         print("Noise correcting {} read counts.".format(i))
         if i=="WT":
-            typing, wt_min = noise_correct(typing,i,sample_dir,sample_id)
+            try:
+                typing, wt_min = noise_correct(typing,i,sample_dir,sample_id, 0.35, 0.25)
+            except:
+                typing, wt_min = noise_correct(typing,i,sample_dir,sample_id, 0.1, 0.25)
         else:
-            typing, mut_min = noise_correct(typing,i,sample_dir,sample_id)
+            try:
+                typing, mut_min = noise_correct(typing,i,sample_dir,sample_id, 0.35, 0.25)
+            except:
+                typing, mut_min = noise_correct(typing,i,sample_dir,sample_id, 0.1, 0.25)
     
     print("Performing quadrant genotyping.")
     typing = quadrant_genotype(typing, wt_min, mut_min)
@@ -78,8 +84,8 @@ def GotchaLabeling(path="", infile="", gene_id="", sample_id=""):
     time2 = timeit.default_timer()
     print("Total time to execute: {}".format(time2-time1))
     
-    print("Performing saturation analysis")
-    saturation_analysis(typing, sample_dir)
+    #print("Performing saturation analysis")
+    #saturation_analysis(typing, sample_dir)
     
     return typing
 
@@ -89,6 +95,8 @@ def read_data(infile="", gene_id="", sample_id=""):
     (based on ATAC calling). Cells without GoTChA reads are dropped.
     '''
     cell_line = pd.read_csv(infile, index_col=0, sep=",")
+    
+    cell_line.fillna(0.0, inplace=True)
     #print(cell_line.head())
     try:
         genotyping = pd.DataFrame(index=cell_line.index)
@@ -110,14 +118,53 @@ def read_data(infile="", gene_id="", sample_id=""):
     
     return genotyping
 
-def noise_correct(typing, feature="", sample_dir="", sample_id=""):
+'''
+def optimize_bandwidth(x, data_input):
+    print(x)
+    kde = KernelDensity(bandwidth=x[0])
+    
+    n = data_input.shape[0]
+    n_splits=10
+    score_list = []
+    
+    for i in range(10):
+        train_index = np.random.choice(
+            np.arange(n), size=round(n/n_splits), replace=False)
+        data_train = data_input[train_index,:]
+        #print(data_temp.shape)
+        #print(data_temp)
+        kde.fit(data_train)
+        #print(data_train.shape)
+        
+        #data_test = data_input.copy()
+        mask = np.ones(n, dtype=bool)
+        mask[train_index] = False
+        data_test = data_input[mask,:].copy()
+        #print(data_test.shape)
+        
+        loglike = kde.score(data_test)
+        score_list.append(loglike)
+        #print(loglike)
+
+    score = -1*np.mean(score_list)
+
+    print('----')
+    print(score)
+    print('****')
+    return score
+'''
+
+def noise_correct(typing, feature="", sample_dir="", sample_id="", bw=0.3, rel_height=0.25):
     np.random.seed(0)
     pseudocount = 1
     X = typing[[feature+'count']]+pseudocount
     logged_counts = np.log(X) #change to log10 later, arcsinh? not log2
 
-    #noise = np.random.normal(0,0.0,typing.shape[0]) #no noise
+    factor = 1.15
+    logged_counts = logged_counts ** factor
+    #noise = np.random.normal(0,0.1,typing.shape[0]) #no noise
     #logged_counts = logged_counts + noise.reshape(-1,1)
+    
     typing['transf_{}'.format(feature)] = logged_counts
 
     plt.hist(logged_counts, density=True, bins=50)
@@ -128,13 +175,93 @@ def noise_correct(typing, feature="", sample_dir="", sample_id=""):
     #            dpi=500, bbox_inches = "tight")
     plt.show()
     plt.clf()
-        
-    bw = 0.05#0.1
+    
+    #bw=0.3
+    
+    '''
+    #bandwidth optimization
+    print("Computing optimal bandwidth...")
+    time1 = timeit.default_timer()
+    data = typing[['transf_{}'.format(feature)]].values
+    
+    
+    def optimize_bandwidth(x):
+        print(x)
+        kde = KernelDensity(bandwidth=x)
+
+        data_input = logged_counts.values.copy()
+
+        n = data_input.shape[0]
+        n_splits=10
+        score_list = []
+
+        for i in range(10):
+            train_index = np.random.choice(
+                np.arange(n), size=round(n/n_splits), replace=False)
+            data_train = data_input[train_index,:]
+            #print(data_temp.shape)
+            #print(data_temp)
+            kde.fit(data_train)
+            #print(data_train.shape)
+
+            #data_test = data_input.copy()
+            mask = np.ones(n, dtype=bool)
+            mask[train_index] = False
+            data_test = data_input[mask,:].copy()
+            #print(data_test.shape)
+
+            loglike = kde.score(data_test)
+            score_list.append(loglike)
+            #print(loglike)
+
+        score = -1*np.mean(score_list)
+
+        #print('----')
+        #print(score)
+        #print('****')
+        return x, score
+    
+    
+    bw_list = np.arange(0.05,0.3,0.01)
+    r = Parallel(n_jobs=-1, verbose=10, max_nbytes=None)(delayed(optimize_bandwidth)(bw) 
+                                        for bw in bw_list)
+    bw_list, results_list = zip(*r)
+    
+    
+    
+    fit = polyfit(bw_list, results_list, 10)
+    poly = Polynomial(fit)
+    
+    poly_x = np.linspace(0.05,0.29,1000)
+    poly_y = poly(poly_x)
+    plt.scatter(bw_list, results_list)#bw_list, results_list)
+    plt.plot(poly_x, poly_y)
+    plt.ylabel("Loss")
+    plt.xlabel("Bandwidth")
+    plt.savefig(sample_dir+"{}_bandwidth.pdf".format(feature), 
+                dpi=500, bbox_inches = "tight")
+    plt.show()
+    plt.clf()
+    
+    bw_guess = bw_list[np.argmin(results_list)]
+    result = minimize(poly, x0=np.array([bw_guess]), 
+                      options={'disp':True}, bounds=((0.05,0.3-0.01),))
+    bw = result.x[0]
+    
+    time2 = timeit.default_timer()
+    print("Optimal bandwidth computed in {} seconds.".format(
+        time2-time1))
+    print("Bandwidth: {}".format(bw))
+    '''
+    
+    bw = bw
+    print("Bandwidth try: {}".format(bw))
+    
     
     kde = KernelDensity(bandwidth=bw)#kernel='exponential')
     kde.fit(typing['transf_{}'.format(feature)].values.reshape(-1, 1))
     x_bin = np.histogram(typing['transf_{}'.format(feature)], bins=50)[1]
-    kde_x = np.linspace(min(x_bin)-0.5,max(x_bin)+0.5,10000)
+    kde_x = np.linspace(min(x_bin)-0.20,max(x_bin)+0.20,10000)
     kde_smooth = np.exp(kde.score_samples(kde_x.reshape(-1, 1)))
 
     plt.hist(typing['transf_{}'.format(feature)], density=True, bins=50)
@@ -148,51 +275,72 @@ def noise_correct(typing, feature="", sample_dir="", sample_id=""):
     plt.clf()
 
     kde_test = kde_smooth
-    
+
     def kde_func(x):
         return np.exp(kde.score_samples(x.reshape(1, -1))[0])
-    
+
     '''plt.plot(kde_x, np.log(kde_test), color='red')
     plt.title("{} (all drops)".format(sample_id))
     plt.ylabel("Log-Probability")
     plt.xlabel("Log(WTcounts)")
     plt.show()
     plt.clf()'''
-    
+
     kde_smooth2 = kde_test#np.log(kde_test)
     #kde_smooth2 = savgol_filter(kde_smooth2, 1001, 3)#, mode='constant', cval=-np.inf)
     '''plt.plot(kde_x, kde_smooth2, color='red')
     plt.show()
     plt.clf()'''
-    
+
     '''fit = polyfit(kde_x, kde_smooth2, 15)
     poly = Polynomial(fit)
     poly_y = poly(kde_x)
     plt.plot(kde_x, poly_y, color='red')
     plt.show()
     plt.clf()'''
-    
+
     #mid = (max(kde_x)-min(kde_x))/2
     #print(mid)
-    
+
     '''kde_smooth3 = savgol_filter(kde_test, 1501, 5)#, mode='constant', cval=-np.inf)
     plt.plot(kde_x, kde_smooth3, color='red')
     plt.show()
     plt.clf()'''
-    
+
     print("Peaks:")
-    peaks, properties = find_peaks(kde_test, width=(None,None), rel_height=0.5)
+    peaks, properties = find_peaks(kde_test, width=(None,None), height=0.005, rel_height=rel_height)
     print(kde_x[peaks])
     print(properties)
     
-    modes = np.argsort(properties['widths'])[-2:]
+    
+    prop_array = properties['widths']/(properties['peak_heights']+1)
+    print("Prop array: ")
+    print(prop_array)
+
+    modes = np.argsort(prop_array)[-2:]
     modes = peaks[modes]
+
+    '''modes = np.argsort(properties['widths'])[-3:]
+    
+    print(peaks[modes])
+    print(kde_x[peaks[modes]])
+    
+    modes2 = modes[:-1]
+    prom = properties['prominences'][modes2]
+    modes2 = modes2[np.argmax(prom)]
+    modes = np.array([modes2, modes[-1]])
+    
+    
+    modes = peaks[modes]'''
+    
     #modes = kde_x[modes]
     
+    modes = np.sort(modes)
     print(modes)
     print(kde_x[modes])
     #mid = np.mean(modes)
-    modes = np.sort(modes)
+    
+    #modes = np.sort(modes)
     
     new_range = kde_test[modes[0]:modes[1]]
     #print(new_range)
@@ -282,11 +430,11 @@ def noise_correct(typing, feature="", sample_dir="", sample_id=""):
     noise_std = np.sqrt(noise_var)
     #typing['transf_{}'.format(feature)] = (logged_counts-noise_mean)/noise_std
 
-    added_var = 0.3**2
+    added_var = 0.1**2
     new_var = noise_var - added_var
     new_std = np.sqrt(new_var)
 
-    typing['transf_{}'.format(feature)] = (np.log(X)-noise_mean)/new_std
+    typing['transf_{}'.format(feature)] = (np.log(X)**factor-noise_mean)/new_std
 
     plt.hist(typing['transf_{}'.format(feature)], bins=50, density=True)
     plt.title('{} Z-scores'.format(feature))
@@ -325,6 +473,26 @@ def KNN_cluster(typing, wt_min, mut_min,
     
     data = typing[['transf_WT', 'transf_MUT']].values
     
+    for label in np.unique(typing['quadrant_class']):
+        try:
+            plt.scatter(data[np.where(typing['quadrant_class']==label)[0],0], 
+                        data[np.where(typing['quadrant_class']==label)[0],1], label=label,
+                       s=5, color=gen_cmap[label])
+        except:
+            pass
+    plt.title('Quadrant Genotype')
+    plt.xlabel('WT Z-scores')
+    plt.ylabel('MUT Z-scores')
+    
+    plt.axhline(y=mut_min, color='r', linestyle='-')
+    plt.axvline(x=wt_min, color='r', linestyle='-')
+    
+    plt.legend()
+    plt.savefig(sample_dir+"quadrant_genotype.pdf", 
+                dpi=500, bbox_inches = "tight")
+    plt.show()
+    plt.clf()
+    
     '''
     range_wt = max(data[:,0])-min(data[:,0])
     range_mut = max(data[:,0])-min(data[:,0])
@@ -344,27 +512,6 @@ def KNN_cluster(typing, wt_min, mut_min,
     x = data[:,0]
     y = data[:,1]
     
-    #print(knn_window)
-    
-    wt_percentile = (len(x[x<wt_min])/len(x))*100
-    print("WT quadrant percentile: "+str(wt_percentile))
-    #print(np.percentile(x, wt_percentile-knn_window))
-    #print(np.percentile(x, wt_percentile+knn_window))
-    
-    mut_percentile = (len(y[y<mut_min])/len(y))*100
-    print("MUT quadrant percentile: "+str(mut_percentile))
-    #print(np.percentile(y, mut_percentile-knn_window))
-    #print(np.percentile(y, mut_percentile+knn_window))
-    
-    indices1 = set(np.where(x>=np.percentile(x, wt_percentile-knn_window))[0])
-    indices1 = indices1.intersection(set(np.where(x<np.percentile(x, wt_percentile+knn_window))[0]))
-    indices2 = set(np.where(y>=np.percentile(y, mut_percentile-knn_window))[0])
-    indices2 = indices2.intersection(set(np.where(y<np.percentile(y, mut_percentile+knn_window))[0]))
-    indices = indices1.union(indices2)
-    
-    indices = np.array(list(indices))
-    indices = typing.index[indices]
-    
     xy = np.vstack([x,y])
     z = gaussian_kde(xy, bw_method=0.1)(xy)#, bw_method=bw
     
@@ -379,6 +526,37 @@ def KNN_cluster(typing, wt_min, mut_min,
     plt.savefig(sample_dir+"total_density.pdf", 
                 dpi=500, bbox_inches = "tight")
     plt.show()
+    
+    #print(knn_window)
+    
+    wt_percentile = (len(x[x<wt_min])/len(x))*100
+    print("WT quadrant percentile: "+str(wt_percentile))
+    #print(np.percentile(x, wt_percentile-knn_window))
+    #print(np.percentile(x, wt_percentile+knn_window))
+    
+    mut_percentile = (len(y[y<mut_min])/len(y))*100
+    print("MUT quadrant percentile: "+str(mut_percentile))
+    #print(np.percentile(y, mut_percentile-knn_window))
+    #print(np.percentile(y, mut_percentile+knn_window))
+    
+    if wt_percentile<99-knn_window:
+        indices1 = set(np.where(x>=np.percentile(x, wt_percentile-knn_window))[0])
+        indices1 = indices1.intersection(set(np.where(x<np.percentile(x, wt_percentile+knn_window))[0]))
+    else:
+        indices1 = set(np.where(x>=np.percentile(x, wt_percentile-knn_window))[0])
+        indices1 = indices1.intersection(set(np.where(x<np.percentile(x, wt_percentile))[0]))
+        
+    if mut_percentile<99-knn_window:
+        indices2 = set(np.where(y>=np.percentile(y, mut_percentile-knn_window))[0])
+        indices2 = indices2.intersection(set(np.where(y<np.percentile(y, mut_percentile+knn_window))[0]))
+    else:
+        indices2 = set(np.where(y>=np.percentile(y, mut_percentile-knn_window))[0])
+        indices2 = indices2.intersection(set(np.where(y<np.percentile(y, mut_percentile))[0]))
+    
+    indices = indices1.union(indices2)
+    
+    indices = np.array(list(indices))
+    indices = typing.index[indices]
     
     typing.loc[indices,'clusters'] = -1
     
@@ -442,26 +620,6 @@ def KNN_cluster(typing, wt_min, mut_min,
     
     #plt.colorbar()
     plt.savefig(sample_dir+"cluster_genotype.pdf", 
-                dpi=500, bbox_inches = "tight")
-    plt.show()
-    plt.clf()
-    
-    for label in np.unique(typing['quadrant_class']):
-        try:
-            plt.scatter(data[np.where(typing['quadrant_class']==label)[0],0], 
-                        data[np.where(typing['quadrant_class']==label)[0],1], label=label,
-                       s=5, color=gen_cmap[label])
-        except:
-            pass
-    plt.title('Quadrant Genotype')
-    plt.xlabel('WT Z-scores')
-    plt.ylabel('MUT Z-scores')
-    
-    plt.axhline(y=mut_min, color='r', linestyle='-')
-    plt.axvline(x=wt_min, color='r', linestyle='-')
-    
-    plt.legend()
-    plt.savefig(sample_dir+"quadrant_genotype.pdf", 
                 dpi=500, bbox_inches = "tight")
     plt.show()
     plt.clf()
