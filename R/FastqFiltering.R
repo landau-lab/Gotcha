@@ -25,7 +25,7 @@ FastqFiltering = function(path, out="/path_to_fastqs/",
   message("------- SPLITTING FASTQS -------")
 
   mclapply(file.index, function(x){
-    system(paste0("zcat ",path,"/",x," | split - -l ",format(reads*4,scientific=F)," --filter='gzip -f - > $FILE.gz' ",out,"Split/Split_ --additional-suffix _", gsub(x, pattern = ".fastq.gz", replacement = ""), ".fastq"))
+    system(paste0("gunzip -c ",path,"/",x," | split - -l ",format(reads*4,scientific=F)," --filter='gzip -f - > $FILE.gz' ",out,"Split/Split_ --additional-suffix _", gsub(x, pattern = ".fastq.gz", replacement = ""), ".fastq"))
   },mc.cores = ncores)
 
   message("------- DONE! -------")
