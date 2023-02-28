@@ -19,7 +19,7 @@ FastqSplit = function(path, out, reads = 2000000, ncores = 1){
   message("------- SPLITTING FASTQS -------")
 
   mclapply(file.index, function(x){
-    system(paste0("zcat ",path,"/",x," | split - -l ",format(reads*4,scientific=F)," --filter='gzip -f - > $FILE.gz' ",out,"Split/Split_ --additional-suffix _", gsub(x, pattern = ".fastq.gz", replacement = ""), ".fastq"))
+    system(paste0("gunzip -c ",path,"/",x," | split - -l ",format(reads*4,scientific=F)," --filter='gzip -f - > $FILE.gz' ",out,"Split/Split_ --additional-suffix _", gsub(x, pattern = ".fastq.gz", replacement = ""), ".fastq"))
   },mc.cores = ncores)
 
   message("------- DONE! -------")
