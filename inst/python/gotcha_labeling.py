@@ -49,7 +49,7 @@ gen_cmap = {'MUT':tab20.colors[0],'WT':tab20.colors[2],
 
 plt.clf()
 
-def GotchaLabeling(path="", infile="", gene_id="", sample_id=""):
+def GotchaLabeling(path="", infile="", gene_id="", sample_id="", quadrants='auto', saturation=False):
     time1 = timeit.default_timer()
     print("Reading in file.")
     typing = read_data(path+infile, gene_id, sample_id)
@@ -63,14 +63,14 @@ def GotchaLabeling(path="", infile="", gene_id="", sample_id=""):
         print("Noise correcting {} read counts.".format(i))
         if i=="WT":
             try:
-                typing, wt_min = noise_correct(typing,i,sample_dir,sample_id, 0.35, 0.25)
+                typing, wt_min = noise_correct(typing,i,sample_dir,sample_id, quadrants, 0.35, 0.25)
             except:
-                typing, wt_min = noise_correct(typing,i,sample_dir,sample_id, 0.1, 0.25)
+                typing, wt_min = noise_correct(typing,i,sample_dir,sample_id, quadrants, 0.1, 0.25)
         else:
             try:
-                typing, mut_min = noise_correct(typing,i,sample_dir,sample_id, 0.35, 0.25)
+                typing, mut_min = noise_correct(typing,i,sample_dir,sample_id, quadrants, 0.35, 0.25)
             except:
-                typing, mut_min = noise_correct(typing,i,sample_dir,sample_id, 0.1, 0.25)
+                typing, mut_min = noise_correct(typing,i,sample_dir,sample_id, quadrants, 0.1, 0.25)
     
     print("Performing quadrant genotyping.")
     typing = quadrant_genotype(typing, wt_min, mut_min)
@@ -84,8 +84,9 @@ def GotchaLabeling(path="", infile="", gene_id="", sample_id=""):
     time2 = timeit.default_timer()
     print("Total time to execute: {}".format(time2-time1))
     
-    #print("Performing saturation analysis")
-    #saturation_analysis(typing, sample_dir)
+    if saturation:
+        print("Performing saturation analysis.")
+        saturation_analysis(typing, sample_dir)
     
     return typing
 
@@ -154,7 +155,7 @@ def optimize_bandwidth(x, data_input):
     return score
 '''
 
-def noise_correct(typing, feature="", sample_dir="", sample_id="", bw=0.3, rel_height=0.25):
+def noise_correct(typing, feature="", sample_dir="", sample_id="", quadrants='auto', bw=0.3, rel_height=0.25):
     np.random.seed(0)
     pseudocount = 1
     X = typing[[feature+'count']]+pseudocount
@@ -166,6 +167,26 @@ def noise_correct(typing, feature="", sample_dir="", sample_id="", bw=0.3, rel_h
     #logged_counts = logged_counts + noise.reshape(-1,1)
     
     typing['transf_{}'.format(feature)] = logged_counts
+    
+    
+    ######################
+    fig, ax = plt.subplots()
+    
+    ax.scatter(np.log(typing[['WTcount']]+pseudocount)**factor, np.log(typing[['MUTcount']]+pseudocount)**factor, s=5)
+    plt.title("Initial scatter plot")
+    plt.xlabel("Log WT counts")
+    plt.ylabel("Log MUT counts")
+    
+    start, end = ax.get_xlim()
+    ax.xaxis.set_ticks(np.arange(0, end, 1.0))
+    start, end = ax.get_ylim()
+    ax.yaxis.set_ticks(np.arange(0, end, 1.0))
+    
+    plt.savefig(sample_dir+"initial_scatter.pdf", 
+                dpi=500, bbox_inches = "tight")
+    plt.show()
+    plt.clf()
+    ################
 
     plt.hist(logged_counts, density=True, bins=50)
     plt.title(feature+' counts')
@@ -177,7 +198,7 @@ def noise_correct(typing, feature="", sample_dir="", sample_id="", bw=0.3, rel_h
     plt.clf()
     
     #bw=0.3
-    
+          
     '''
     #bandwidth optimization
     print("Computing optimal bandwidth...")
@@ -278,104 +299,38 @@ def noise_correct(typing, feature="", sample_dir="", sample_id="", bw=0.3, rel_h
 
     def kde_func(x):
         return np.exp(kde.score_samples(x.reshape(1, -1))[0])
-
-    '''plt.plot(kde_x, np.log(kde_test), color='red')
-    plt.title("{} (all drops)".format(sample_id))
-    plt.ylabel("Log-Probability")
-    plt.xlabel("Log(WTcounts)")
-    plt.show()
-    plt.clf()'''
-
+    
     kde_smooth2 = kde_test#np.log(kde_test)
-    #kde_smooth2 = savgol_filter(kde_smooth2, 1001, 3)#, mode='constant', cval=-np.inf)
-    '''plt.plot(kde_x, kde_smooth2, color='red')
-    plt.show()
-    plt.clf()'''
+    
+    
+    if quadrants=='auto':
+        print("Peaks:")
+        peaks, properties = find_peaks(kde_test, width=(None,None), height=0.005, rel_height=rel_height)
+        print(kde_x[peaks])
+        print(properties)
 
-    '''fit = polyfit(kde_x, kde_smooth2, 15)
-    poly = Polynomial(fit)
-    poly_y = poly(kde_x)
-    plt.plot(kde_x, poly_y, color='red')
-    plt.show()
-    plt.clf()'''
+        prop_array = properties['widths']/(properties['peak_heights']+1)
+        print("Prop array: ")
+        print(prop_array)
 
-    #mid = (max(kde_x)-min(kde_x))/2
-    #print(mid)
+        modes = np.argsort(prop_array)[-2:]
+        modes = peaks[modes]
 
-    '''kde_smooth3 = savgol_filter(kde_test, 1501, 5)#, mode='constant', cval=-np.inf)
-    plt.plot(kde_x, kde_smooth3, color='red')
-    plt.show()
-    plt.clf()'''
+        modes = np.sort(modes)
+        print(modes)
+        print(kde_x[modes])
 
-    print("Peaks:")
-    peaks, properties = find_peaks(kde_test, width=(None,None), height=0.005, rel_height=rel_height)
-    print(kde_x[peaks])
-    print(properties)
+        new_range = kde_test[modes[0]:modes[1]]
+        #print(new_range)
+        new_min = np.argmin(new_range) + modes[0]
+        new_min = kde_x[new_min]
+        print(new_min)
+    if quadrants != 'auto':
+        if feature=='WT':
+            new_min = quadrants[0]
+        else:
+            new_min = quadrants[1]
     
-    
-    prop_array = properties['widths']/(properties['peak_heights']+1)
-    print("Prop array: ")
-    print(prop_array)
-
-    modes = np.argsort(prop_array)[-2:]
-    modes = peaks[modes]
-
-    '''modes = np.argsort(properties['widths'])[-3:]
-    
-    print(peaks[modes])
-    print(kde_x[peaks[modes]])
-    
-    modes2 = modes[:-1]
-    prom = properties['prominences'][modes2]
-    modes2 = modes2[np.argmax(prom)]
-    modes = np.array([modes2, modes[-1]])
-    
-    
-    modes = peaks[modes]'''
-    
-    #modes = kde_x[modes]
-    
-    modes = np.sort(modes)
-    print(modes)
-    print(kde_x[modes])
-    #mid = np.mean(modes)
-    
-    #modes = np.sort(modes)
-    
-    new_range = kde_test[modes[0]:modes[1]]
-    #print(new_range)
-    new_min = np.argmin(new_range) + modes[0]
-    new_min = kde_x[new_min]
-    print(new_min)
-    
-    #mid = np.mean(np.percentile(logged_counts, [25,75]))
-    #mid = np.percentile(logged_counts, 0.5)
-    #print(mid)
-    
-    '''
-    result = minimize(poly, x0=np.array([mid]), 
-                        options={'disp':False}, bounds=((min(kde_x), max(kde_x)),),
-                     method='Nelder-Mead')
-    new_min = result.x[0]
-    print(new_min)
-    
-    result = minimize(kde_func, x0=np.array([new_min]), 
-                        options={'disp':True}, bounds=((min(kde_x), max(kde_x)),),
-                     method='Nelder-Mead')
-    new_min = result.x[0]
-    print(new_min)
-    
-    if feature=="WT":
-        alt_feature="MUT"
-    else:
-        alt_feature="WT"
-
-    if new_min==max(kde_x):
-        zero_counts = typing['{}count'.format(alt_feature)]
-        zero_counts = zero_counts[zero_counts==0].index
-
-        new_min = np.percentile(typing.loc[zero_counts,'transf_{}'.format(feature)], 99.99)
-    '''
 
     noise_values = logged_counts
     noise_values = noise_values[noise_values<new_min]
@@ -540,17 +495,17 @@ def KNN_cluster(typing, wt_min, mut_min,
     #print(np.percentile(y, mut_percentile+knn_window))
     
     if wt_percentile<99-knn_window:
-        indices1 = set(np.where(x>=np.percentile(x, wt_percentile-knn_window))[0])
+        indices1 = set(np.where(x>np.percentile(x, wt_percentile-knn_window))[0])
         indices1 = indices1.intersection(set(np.where(x<np.percentile(x, wt_percentile+knn_window))[0]))
     else:
-        indices1 = set(np.where(x>=np.percentile(x, wt_percentile-knn_window))[0])
+        indices1 = set(np.where(x>np.percentile(x, wt_percentile-knn_window))[0])
         indices1 = indices1.intersection(set(np.where(x<np.percentile(x, wt_percentile))[0]))
         
     if mut_percentile<99-knn_window:
-        indices2 = set(np.where(y>=np.percentile(y, mut_percentile-knn_window))[0])
+        indices2 = set(np.where(y>np.percentile(y, mut_percentile-knn_window))[0])
         indices2 = indices2.intersection(set(np.where(y<np.percentile(y, mut_percentile+knn_window))[0]))
     else:
-        indices2 = set(np.where(y>=np.percentile(y, mut_percentile-knn_window))[0])
+        indices2 = set(np.where(y>np.percentile(y, mut_percentile-knn_window))[0])
         indices2 = indices2.intersection(set(np.where(y<np.percentile(y, mut_percentile))[0]))
     
     indices = indices1.union(indices2)
