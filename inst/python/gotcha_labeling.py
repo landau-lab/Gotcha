@@ -44,8 +44,8 @@ mpl.rcParams['figure.dpi'] = 500
 sns.set(font_scale=1.2)
 sns.set_style("ticks")
 tab20=plt.get_cmap('tab20')
-gen_cmap = {'MUT':tab20.colors[0],'WT':tab20.colors[2],
-            'HET':tab20.colors[4],'NA':tab20.colors[6],'-1':tab20.colors[8]}
+gen_cmap = {'MUT':'#CB2026','WT':'#38459C',
+            'HET':'#F89622','NA':'#D3D3D3','-1':tab20.colors[9]}
 
 plt.clf()
 
@@ -170,22 +170,23 @@ def noise_correct(typing, feature="", sample_dir="", sample_id="", quadrants='au
     
     
     ######################
-    fig, ax = plt.subplots()
-    
-    ax.scatter(np.log(typing[['WTcount']]+pseudocount)**factor, np.log(typing[['MUTcount']]+pseudocount)**factor, s=5)
-    plt.title("Initial scatter plot")
-    plt.xlabel("Log WT counts")
-    plt.ylabel("Log MUT counts")
-    
-    start, end = ax.get_xlim()
-    ax.xaxis.set_ticks(np.arange(0, end, 1.0))
-    start, end = ax.get_ylim()
-    ax.yaxis.set_ticks(np.arange(0, end, 1.0))
-    
-    plt.savefig(sample_dir+"initial_scatter.pdf", 
-                dpi=500, bbox_inches = "tight")
-    plt.show()
-    plt.clf()
+    if not os.path.isfile(sample_dir+"initial_scatter.pdf"):
+        fig, ax = plt.subplots()
+
+        ax.scatter(np.log(typing[['WTcount']]+pseudocount)**factor, np.log(typing[['MUTcount']]+pseudocount)**factor, s=5)
+        plt.title("Initial scatter plot")
+        plt.xlabel("Log WT counts")
+        plt.ylabel("Log MUT counts")
+
+        start, end = ax.get_xlim()
+        ax.xaxis.set_ticks(np.arange(0, end, 1.0))
+        start, end = ax.get_ylim()
+        ax.yaxis.set_ticks(np.arange(0, end, 1.0))
+
+        plt.savefig(sample_dir+"initial_scatter.pdf", 
+                    dpi=500, bbox_inches = "tight")
+        plt.show()
+        plt.clf()
     ################
 
     plt.hist(logged_counts, density=True, bins=50)
