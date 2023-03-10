@@ -15,13 +15,17 @@ GotchaLabeling <-
   function(path = "",
            infile = "",
            gene_id = "",
-           sample_id = "") {
+           sample_id = "",
+           sample_column = "",
+           saturation = FALSE) {
     return(
       reticulate::import_from_path(module = "gotcha_labeling", path = find.package('Gotcha'))$GotchaLabeling(
         path = path,
         infile = infile,
         gene_id = gene_id,
-        sample_id = sample_id
+        sample_id = sample_id,
+        sample_column = "",
+        saturation = saturation
       )
     )
   }
