@@ -62,9 +62,9 @@ def GotchaLabeling(path="", infile="", gene_id="", sample_id="", sample_column="
     for i in ["WT", "MUT"]:
         print("Noise correcting {} read counts.".format(i))
         if i=="WT":
-            typing, wt_min, wt_thresh, wt_auto = noise_correct(typing,i,sample_dir,sample_id, 'auto', 0.1, 0.25)
+            typing, wt_min, wt_thresh, wt_auto = noise_correct(typing,i,sample_dir,sample_id, 'auto', 0.25, 0.25)
         else:
-            typing, mut_min, mut_thresh, mut_auto = noise_correct(typing,i,sample_dir,sample_id, 'auto', 0.1, 0.25)
+            typing, mut_min, mut_thresh, mut_auto = noise_correct(typing,i,sample_dir,sample_id, 'auto', 0.25, 0.25)
     
     pairs = [(a,b) for a in wt_thresh for b in mut_thresh]
     pairs = list(set(pairs))
@@ -99,9 +99,9 @@ def GotchaLabeling(path="", infile="", gene_id="", sample_id="", sample_column="
         for j in ["WT", "MUT"]:
             print("Noise correcting {} read counts.".format(i))
             if j=="WT":
-                typing, wt_min, wt_thresh, wt_auto = noise_correct(typing,j,new_dir,sample_id, pairs[i], 0.1, 0.25)
+                typing, wt_min, wt_thresh, wt_auto = noise_correct(typing,j,new_dir,sample_id, pairs[i], 0.25, 0.25)
             else:
-                typing, mut_min, mut_thresh, mut_auto = noise_correct(typing,j,new_dir,sample_id, pairs[i], 0.1, 0.25)
+                typing, mut_min, mut_thresh, mut_auto = noise_correct(typing,j,new_dir,sample_id, pairs[i], 0.25, 0.25)
         print("Performing quadrant genotyping.")
         typing = quadrant_genotype(typing, wt_min, mut_min)
         
@@ -311,7 +311,7 @@ def noise_correct(typing, feature="", sample_dir="", sample_id="", quadrants='au
     kde = KernelDensity(bandwidth=bw)#kernel='exponential')
     kde.fit(typing['transf_{}'.format(feature)].values.reshape(-1, 1))
     x_bin = np.histogram(typing['transf_{}'.format(feature)], bins=50)[1]
-    kde_x = np.linspace(min(x_bin)-0.20,max(x_bin)+0.20,10000)
+    kde_x = np.linspace(min(x_bin)-0.50,max(x_bin)+0.50,10000)
     kde_smooth = np.exp(kde.score_samples(kde_x.reshape(-1, 1)))
 
     plt.hist(typing['transf_{}'.format(feature)], density=True, bins=50)
@@ -367,7 +367,7 @@ def noise_correct(typing, feature="", sample_dir="", sample_id="", quadrants='au
     print(kde_x[peaks])
     print(properties)
 
-    prop_array = properties['widths']/(properties['peak_heights']+1)
+    prop_array = properties['widths']#/(properties['peak_heights']+1)
     print("Prop array: ")
     print(prop_array)
     
