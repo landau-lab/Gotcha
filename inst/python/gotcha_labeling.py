@@ -49,10 +49,10 @@ gen_cmap = {'MUT':'#CB2026','WT':'#38459C',
 
 plt.clf()
 
-def GotchaLabeling(path="", infile="", gene_id="", sample_id="", saturation=False):
+def GotchaLabeling(path="", infile="", gene_id="", sample_id="", sample_column="", saturation=False):
     time1 = timeit.default_timer()
     print("Reading in file.")
-    typing = read_data(path+infile, gene_id, sample_id)
+    typing = read_data(path+infile, gene_id, sample_id, sample_column)
     sample_dir = path+sample_id+'/'
     try:
         os.mkdir(sample_dir)
@@ -116,7 +116,7 @@ def GotchaLabeling(path="", infile="", gene_id="", sample_id="", saturation=Fals
     
     return typing
 
-def read_data(infile="", gene_id="", sample_id=""):
+def read_data(infile="", gene_id="", sample_id="", sample_column=""):
     '''
     This function reads in the sequencing reads from only real cells
     (based on ATAC calling). Cells without GoTChA reads are dropped.
@@ -127,9 +127,9 @@ def read_data(infile="", gene_id="", sample_id=""):
     #print(cell_line.head())
     try:
         genotyping = pd.DataFrame(index=cell_line.index)
-        cell_line['Sample'] = cell_line['Sample'].astype(str)
-        if sample_id in np.unique(cell_line['Sample'].values):
-            cell_line = cell_line.loc[cell_line['Sample']==sample_id, :]
+        cell_line[sample_column] = cell_line[sample_column].astype(str)
+        if sample_id in np.unique(cell_line[sample_column].values):
+            cell_line = cell_line.loc[cell_line[sample_column]==sample_id, :]
         genotyping['WTcount'] = cell_line[gene_id+'_WTcount']
         genotyping['MUTcount'] = cell_line[gene_id+'_MUTcount']
     except:
