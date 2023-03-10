@@ -49,7 +49,7 @@ gen_cmap = {'MUT':'#CB2026','WT':'#38459C',
 
 plt.clf()
 
-def GotchaLabeling(path="", infile="", gene_id="", sample_id="", quadrants='auto', saturation=False):
+def GotchaLabeling(path="", infile="", gene_id="", sample_id="", saturation=False):
     time1 = timeit.default_timer()
     print("Reading in file.")
     typing = read_data(path+infile, gene_id, sample_id)
@@ -62,15 +62,14 @@ def GotchaLabeling(path="", infile="", gene_id="", sample_id="", quadrants='auto
     for i in ["WT", "MUT"]:
         print("Noise correcting {} read counts.".format(i))
         if i=="WT":
-            try:
-                typing, wt_min = noise_correct(typing,i,sample_dir,sample_id, quadrants, 0.35, 0.25)
-            except:
-                typing, wt_min = noise_correct(typing,i,sample_dir,sample_id, quadrants, 0.1, 0.25)
+            typing, wt_min, wt_thresh, wt_auto = noise_correct(typing,i,sample_dir,sample_id, 'auto', 0.1, 0.25)
         else:
-            try:
-                typing, mut_min = noise_correct(typing,i,sample_dir,sample_id, quadrants, 0.35, 0.25)
-            except:
-                typing, mut_min = noise_correct(typing,i,sample_dir,sample_id, quadrants, 0.1, 0.25)
+            typing, mut_min, mut_thresh, mut_auto = noise_correct(typing,i,sample_dir,sample_id, 'auto', 0.1, 0.25)
+    
+    pairs = [(a,b) for a in wt_thresh for b in mut_thresh]
+    pairs = list(set(pairs))
+    pairs.remove((wt_auto, mut_auto))
+    print(pairs)
     
     print("Performing quadrant genotyping.")
     typing = quadrant_genotype(typing, wt_min, mut_min)
@@ -80,13 +79,40 @@ def GotchaLabeling(path="", infile="", gene_id="", sample_id="", quadrants='auto
                       5, sample_dir)
     
     typing.to_csv(sample_dir+sample_id+'_genotype_labels.csv')
-    print("All analysis complete!")
-    time2 = timeit.default_timer()
-    print("Total time to execute: {}".format(time2-time1))
     
     if saturation:
         print("Performing saturation analysis.")
         saturation_analysis(typing, sample_dir)
+        
+    ########
+    for i in range(len(pairs)):
+        new_dir = sample_dir+'Output_{}/'.format(i+1)
+        try:
+            os.mkdir(new_dir)
+        except:
+            pass
+        
+        print("Analyzing case {}.".format(i+1))
+        
+        for j in ["WT", "MUT"]:
+            print("Noise correcting {} read counts.".format(i))
+            if j=="WT":
+                typing, wt_min, wt_thresh, wt_auto = noise_correct(typing,j,new_dir,sample_id, pairs[i], 0.1, 0.25)
+            else:
+                typing, mut_min, mut_thresh, mut_auto = noise_correct(typing,j,new_dir,sample_id, pairs[i], 0.1, 0.25)
+        print("Performing quadrant genotyping.")
+        typing = quadrant_genotype(typing, wt_min, mut_min)
+        
+        print("Computing KNN-based clusters.")
+        typing = KNN_cluster(typing, wt_min, mut_min, 5, new_dir)
+    
+        typing.to_csv(new_dir+sample_id+'_genotype_labels.csv')
+    
+    ########
+    
+    print("All analysis complete!")
+    time2 = timeit.default_timer()
+    print("Total time to execute: {}".format(time2-time1))
     
     return typing
 
@@ -303,7 +329,7 @@ def noise_correct(typing, feature="", sample_dir="", sample_id="", quadrants='au
     
     kde_smooth2 = kde_test#np.log(kde_test)
     
-    
+    '''
     if quadrants=='auto':
         print("Peaks:")
         peaks, properties = find_peaks(kde_test, width=(None,None), height=0.005, rel_height=rel_height)
@@ -331,8 +357,53 @@ def noise_correct(typing, feature="", sample_dir="", sample_id="", quadrants='au
             new_min = quadrants[0]
         else:
             new_min = quadrants[1]
+    '''
+    ##############
     
+    print("Peaks:")
+    peaks, properties = find_peaks(kde_test, width=(None,None), height=0.005, rel_height=rel_height)
+    print(kde_x[peaks])
+    print(properties)
 
+    prop_array = properties['widths']/(properties['peak_heights']+1)
+    print("Prop array: ")
+    print(prop_array)
+    
+    thresh_list = []
+
+    if quadrants=='auto':
+        modes = np.argsort(prop_array)[-3:]
+        modes = peaks[modes]
+        modes = np.sort(modes)
+        print(modes)
+        print(kde_x[modes])
+
+        pairs = [np.sort([a, b]) for idx, a in enumerate(modes) for b in modes[idx + 1:]]
+        thresh_list = []
+        
+        for i in range(len(pairs)):
+            new_range = kde_test[pairs[i][0]:pairs[i][1]]
+            new_min = np.argmin(new_range) + pairs[i][0]
+            new_min = kde_x[new_min]
+            thresh_list.append(new_min)
+            
+        modes = np.argsort(prop_array)[-2:]
+        modes = peaks[modes]
+        modes = np.sort(modes)
+        
+        new_range = kde_test[modes[0]:modes[1]]
+        #print(new_range)
+        new_min = np.argmin(new_range) + modes[0]
+        new_min = kde_x[new_min]
+        print(new_min)
+        
+    if quadrants != 'auto':
+        if feature=='WT':
+            new_min = quadrants[0]
+        else:
+            new_min = quadrants[1]
+    
+    ##############
     noise_values = logged_counts
     noise_values = noise_values[noise_values<new_min]
     noise_values = noise_values.dropna()
@@ -404,7 +475,7 @@ def noise_correct(typing, feature="", sample_dir="", sample_id="", quadrants='au
     feat_min = (new_min-noise_mean)/new_std
     print(feat_min)
     
-    return typing, feat_min
+    return typing, feat_min, thresh_list, new_min
 
 def quadrant_genotype(typing, wt_min, mut_min):
     typing['quadrant_class'] = 'NA'
@@ -469,7 +540,7 @@ def KNN_cluster(typing, wt_min, mut_min,
     y = data[:,1]
     
     xy = np.vstack([x,y])
-    z = gaussian_kde(xy, bw_method=0.1)(xy)#, bw_method=bw
+    z = np.log(gaussian_kde(xy, bw_method=0.1)(xy))#, bw_method=bw
     
     fig, ax = plt.subplots()
     ax.scatter(x, y, c=z, s=5, cmap='plasma')#, edgecolor='')
