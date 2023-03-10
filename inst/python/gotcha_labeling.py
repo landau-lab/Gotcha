@@ -80,6 +80,8 @@ def GotchaLabeling(path="", infile="", gene_id="", sample_id="", sample_column="
     
     typing.to_csv(sample_dir+sample_id+'_genotype_labels.csv')
     
+    typing_orig = typing.copy()
+    
     if saturation:
         print("Performing saturation analysis.")
         saturation_analysis(typing, sample_dir)
@@ -114,7 +116,7 @@ def GotchaLabeling(path="", infile="", gene_id="", sample_id="", sample_column="
     time2 = timeit.default_timer()
     print("Total time to execute: {}".format(time2-time1))
     
-    return typing
+    return typing_orig
 
 def read_data(infile="", gene_id="", sample_id="", sample_column=""):
     '''
