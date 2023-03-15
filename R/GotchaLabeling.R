@@ -24,7 +24,7 @@ GotchaLabeling <-
         infile = infile,
         gene_id = gene_id,
         sample_id = sample_id,
-        sample_column = "",
+        sample_column = sample_column,
         saturation = saturation
       )
     )
