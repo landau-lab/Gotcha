@@ -127,18 +127,21 @@ def read_data(infile="", gene_id="", sample_id="", sample_column=""):
     
     cell_line.fillna(0.0, inplace=True)
     #print(cell_line.head())
-    try:
-        genotyping = pd.DataFrame(index=cell_line.index)
-        cell_line[sample_column] = cell_line[sample_column].astype(str)
-        if sample_id in np.unique(cell_line[sample_column].values):
-            cell_line = cell_line.loc[cell_line[sample_column]==sample_id, :]
-        genotyping['WTcount'] = cell_line[gene_id+'_WTcount']
-        genotyping['MUTcount'] = cell_line[gene_id+'_MUTcount']
+    
+    #try:
+    genotyping = pd.DataFrame(index=cell_line.index)
+    cell_line[sample_column] = cell_line[sample_column].astype(str)
+    if sample_id in np.unique(cell_line[sample_column].values):
+        cell_line = cell_line.loc[cell_line[sample_column]==sample_id, :]
+    genotyping['WTcount'] = cell_line[gene_id+'_WTcount']
+    genotyping['MUTcount'] = cell_line[gene_id+'_MUTcount']
+    '''
     except:
         cell_line = cell_line.set_index("WhiteListMatch")
         genotyping = pd.DataFrame(index=cell_line.index)
         genotyping['WTcount'] = cell_line['WTcount']
         genotyping['MUTcount'] = cell_line['MUTcount']
+    '''
     
     #print(genotyping.head())
     index = genotyping[['WTcount', 'MUTcount']].dropna().index
