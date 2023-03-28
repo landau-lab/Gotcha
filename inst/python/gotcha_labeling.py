@@ -569,7 +569,7 @@ def KNN_cluster(typing, wt_min, mut_min,
     #print(np.percentile(y, mut_percentile-knn_window))
     #print(np.percentile(y, mut_percentile+knn_window))
     
-    if wt_percentile<99-knn_window:
+    if wt_percentile<99-knn_window and wt_percentile>=knn_window+1:
         indices1 = set(np.where(x>np.percentile(x, wt_percentile-knn_window))[0])
         indices1 = indices1.intersection(set(np.where(x<np.percentile(x, wt_percentile+knn_window))[0]))
     elif wt_percentile<knn_window+1:
@@ -579,7 +579,7 @@ def KNN_cluster(typing, wt_min, mut_min,
         indices1 = set(np.where(x>np.percentile(x, wt_percentile-knn_window))[0])
         indices1 = indices1.intersection(set(np.where(x<np.percentile(x, wt_percentile))[0]))
         
-    if mut_percentile<99-knn_window:
+    if mut_percentile<99-knn_window and mut_percentile>=knn_window+1:
         indices2 = set(np.where(y>np.percentile(y, mut_percentile-knn_window))[0])
         indices2 = indices2.intersection(set(np.where(y<np.percentile(y, mut_percentile+knn_window))[0]))
     elif mut_percentile<knn_window+1:
