@@ -656,7 +656,7 @@ def KNN_cluster(typing, wt_min, mut_min,
     
     time1 = timeit.default_timer()
     STC = SelfTrainingClassifier(KNeighborsClassifier(n_neighbors=n_neighbors, weights='distance'),#gauss_func),
-                            criterion='k_best', k_best=1, max_iter=None)
+                            criterion='k_best', k_best=5, max_iter=None) #changed to 5 from 1
     STC.fit(data, typing['clusters'])
     time2 = timeit.default_timer()
     print("Label propagation completed in {} seconds.".format(
