@@ -62,9 +62,9 @@ def GotchaLabeling(path="", infile="", gene_id="", sample_id="", sample_column="
     for i in ["WT", "MUT"]:
         print("Noise correcting {} read counts.".format(i))
         if i=="WT":
-            typing, wt_min, wt_thresh, wt_auto = noise_correct(typing,i,sample_dir,sample_id, 'auto', 0.25, 0.25)
+            typing, wt_min, wt_thresh, wt_auto = noise_correct(typing,i,sample_dir,sample_id, 'auto', 0.15, 0.25)
         else:
-            typing, mut_min, mut_thresh, mut_auto = noise_correct(typing,i,sample_dir,sample_id, 'auto', 0.25, 0.25)
+            typing, mut_min, mut_thresh, mut_auto = noise_correct(typing,i,sample_dir,sample_id, 'auto', 0.15, 0.25)
     
     pairs = [(a,b) for a in wt_thresh for b in mut_thresh]
     pairs = list(set(pairs))
@@ -99,9 +99,9 @@ def GotchaLabeling(path="", infile="", gene_id="", sample_id="", sample_column="
         for j in ["WT", "MUT"]:
             print("Noise correcting {} read counts.".format(i))
             if j=="WT":
-                typing, wt_min, wt_thresh, wt_auto = noise_correct(typing,j,new_dir,sample_id, pairs[i], 0.25, 0.25)
+                typing, wt_min, wt_thresh, wt_auto = noise_correct(typing,j,new_dir,sample_id, pairs[i], 0.15, 0.25)
             else:
-                typing, mut_min, mut_thresh, mut_auto = noise_correct(typing,j,new_dir,sample_id, pairs[i], 0.25, 0.25)
+                typing, mut_min, mut_thresh, mut_auto = noise_correct(typing,j,new_dir,sample_id, pairs[i], 0.15, 0.25)
         print("Performing quadrant genotyping.")
         typing = quadrant_genotype(typing, wt_min, mut_min)
         
@@ -383,6 +383,38 @@ def noise_correct(typing, feature="", sample_dir="", sample_id="", quadrants='au
 
         pairs = [np.sort([a, b]) for idx, a in enumerate(modes) for b in modes[idx + 1:]]
         thresh_list = []
+        
+        '''
+        print("--------------------------------------")
+        fit = polyfit(kde_x, kde_test, 20)
+        poly = Polynomial(fit)
+        poly_y = poly(kde_x)
+        #poly_y = savgol_filter(kde_test, 3333, 3, mode='constant', cval=0.0)
+        plt.scatter(kde_x, poly_y, s=7)
+        plt.title("smoothed fit")
+        plt.ylim([0.0,0.9]
+        plt.show()
+        plt.gcf()
+        
+        
+        print('--------------------------------------')
+        print("second derivative: ")
+        dy=np.diff(poly_y,1)
+        dx=np.diff(kde_x,1)
+        yfirst=dy/dx
+        xfirst=0.5*(kde_x[:-1]+kde_x[1:])
+        
+        dyfirst=np.diff(yfirst,1)
+        dxfirst=np.diff(xfirst,1)
+        ysecond=dyfirst/dxfirst
+
+        xsecond=0.5*(xfirst[:-1]+xfirst[1:])
+        
+        plt.scatter(xsecond, ysecond, s=7)
+        plt.title("second derivative")
+        plt.show()
+        plt.gcf()
+        '''
         
         for i in range(len(pairs)):
             new_range = kde_test[pairs[i][0]:pairs[i][1]]
