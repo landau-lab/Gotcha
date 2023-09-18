@@ -6,7 +6,7 @@ The Gotcha R package is currently in beta. To install the release version:
 > devtools::install_github(repo = "landau-lab/Gotcha")
 
 ### Tutorials (more coming soon...)
-[How to run Gotcha in slurm clusters with parallel computing](https://github.com/landau-lab/Gotcha/blob/development/1%20-%20Running%20Gotcha%20with%20parallel%20computing%20in%20slurm.pdf)
+[How to run Gotcha in slurm clusters with parallel computing](https://github.com/landau-lab/Gotcha/blob/main/1%20-%20Running%20Gotcha%20with%20parallel%20computing%20in%20slurm.pdf)
 
 [How to perform noise correction and genotype labeling](https://github.com/landau-lab/Gotcha/blob/development/2%20-%20Noise%20correction%20and%20genotype%20labeling.pdf)
 
