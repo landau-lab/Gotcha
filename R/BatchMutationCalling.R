@@ -3,7 +3,6 @@
 #' @param out Path to the fastq or filtered fastq files
 #' @param wt.max.mismatch Integer indicating the number of accepted missmatches when performing pattern matching for the wild-type sequence
 #' @param mut.max.mismatch Integer indicating the number of accepted missmatches when performing pattern matching for the mutant sequence
-#' @param keep.raw.reads Logical. Whether to return the raw reads in the output file. Defaults to false
 #' @param ncores Integer indicating the number of cores to use for parallel processing
 #' @param reverse.complement Whether to take the reverse complement of the cell barcodes
 #' @param testing Logical indicating whether to sample the first 1,000 reads for testing the function
@@ -19,20 +18,19 @@
 
 
 BatchMutationCalling = function(out = "/path_to_filtered_fastqs/",
+                                barcodes.file.path = "/path_to_singlecell.csv",
                                 wt.max.mismatch = 0,
                                 mut.max.mismatch = 0,
-                                keep.raw.reads = F,
                                 ncores = 1,
                                 reverse.complement = T,
                                 testing = F,
                                 which.read = "R1",
-                                barcodes.file.path = "/path_to_singlecell.csv",
                                 wt.sequence =  "CGG",
                                 mut.sequence = "CAG",
                                 mutation.start = 31,
                                 mutation.end = 34,
                                 max.distance = 2,
-                                rewrite = TRUE
+                                rewrite = T
 ){
   if (max.distance > 2){ message("WARNING: MAX DISTANCE ", max.distance, " ALLOWS MANY MISMATCHES!")}
   if (testing == TRUE){ message("------- READS WILL BE SUBSETTED FOR TESTING -------")}
