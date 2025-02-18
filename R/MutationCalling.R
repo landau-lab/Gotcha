@@ -1,15 +1,12 @@
 #' Define read genotype and read counts per genotype for each cell barcode
 #' @param out Path to the fastq or filtered fastq files
+#' @param barcodes.file.path Path to the file containing the cell barcodes detected in the experiment
 #' @param wt.max.mismatch Integer indicating the number of accepted missmatches when performing pattern matching for the wild-type sequence
 #' @param mut.max.mismatch Integer indicating the number of accepted missmatches when performing pattern matching for the mutant sequence
-#' @param keep.raw.reads Logical. Whether to return the raw reads in the output file. Defaults to false
 #' @param ncores Integer indicating the number of cores to use for parallel processing
 #' @param reverse.complement Whether to take the reverse complement of the cell barcodes
 #' @param testing Logical indicating whether to sample the first 1,000 reads for testing the function
 #' @param which.read Which read to select to look for the mutation site
-#' @param primer.sequence Character vector of length one indicating the primer sequence
-#' @param primed.max.mismatch  Integer indicating the maximum number of mismatches accepted when searching for the primer sequence
-#' @param barcodes.file.path Path to the file containing the cell barcodes detected in the experiment
 #' @param wt.sequence Character vector of length one specifying the expected wild-type sequence
 #' @param mut.sequence Character vector of length one specifying the expected mutant sequence
 #' @param mutation.start Position in which the expected wild-type or mutant sequence starts in the read
@@ -36,7 +33,7 @@ subset_for_testing <- function(fastq_data, max_reads = 1000, ncores) {
   }, mc.cores = ncores)
 }
 
-convert_to_numeric_matrix <- function(input) {
+convert_to_numeric_matrix <- function(input, order) {
   # Convert each character in the barcode to a numeric value
   char_to_num <- c(A = 1, C = 2, G = 3, T = 4)
   numeric_matrix <- t(sapply(input, function(x) {
@@ -126,10 +123,10 @@ genotype_reads <- function(reads, wt_seq, mut_seq, mutation_start, mutation_end,
 # Main function
 MutationCalling <- function(out, barcodes.file.path, wt.max.mismatch = 0, mut.max.mismatch = 0,
                             ncores = 1, reverse.complement = TRUE, testing = FALSE, which.read = "R1",
-                            wt.sequence = "CGG", mut.sequence = "CAG", mutation.start = 31, 
+                            wt.sequence = "CGG", mut.sequence = "CAG", mutation.start = 31,
                             mutation.end = 34, max.distance = 2) {
-                        
-  # make output file 
+
+  # make output file
   out_file <- paste0(out, "out.log")
   # get chunk name
   chunk_name <- basename(out)
@@ -216,7 +213,7 @@ MutationCalling <- function(out, barcodes.file.path, wt.max.mismatch = 0, mut.ma
   cat(paste0("------- SAVING OUTPUT ", chunk_name ," ... -------"), file = out_file, sep = "\n", append=TRUE)
   # Output processing
   output <- list(matched_barcodes = matched_barcodes, genotyped_reads = genotyped_reads)
-  
+
   cat(paste0("------- ", chunk_name ," CHUNK DONE! -------"), file = out_file, sep = "\n", append=TRUE)
   return(output)
 }

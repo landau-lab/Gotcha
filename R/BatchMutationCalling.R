@@ -1,4 +1,4 @@
-#' Define read genotype and read counts per genotype for each cell barcode using parallel job submission to slurm cluster
+#' Define read genotype and read counts per genotype for each cell barcode using parallel submission of mutation_calling function
 #'
 #' @param out Path to the fastq or filtered fastq files
 #' @param wt.max.mismatch Integer indicating the number of accepted missmatches when performing pattern matching for the wild-type sequence
@@ -8,18 +8,14 @@
 #' @param reverse.complement Whether to take the reverse complement of the cell barcodes
 #' @param testing Logical indicating whether to sample the first 1,000 reads for testing the function
 #' @param which.read Which read to select to look for the mutation site
-#' @param primer.sequence Character vector of length one indicating the primer sequence
-#' @param primed.max.mismatch  Integer indicating the maximum number of mismatches accepted when searching for the primer sequence
 #' @param barcodes.file.path Path to the file containing the cell barcodes detected in the experiment
 #' @param wt.sequence Character vector of length one specifying the expected wild-type sequence
 #' @param mut.sequence Character vector of length one specifying the expected mutant sequence
 #' @param mutation.start Position in which the expected wild-type or mutant sequence starts in the read
 #' @param mutation.end Position in which the expected wild-type or mutant sequence ends in the read
-#' @param job.hours
-#' @param job.memory
-#' @return Archr Project with added genotyping columns into the metadata
-#'
-#'
+#' @param max.distance Integer indicating the number of mismatches allowed between barcodes and barcode whitelist
+#' @param rewrite Logical indicating whether the chunk should be rewritten if it already exists
+#' @return NULL
 
 
 BatchMutationCalling = function(out = "/path_to_filtered_fastqs/",
