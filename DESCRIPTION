@@ -10,7 +10,6 @@ Description: Package to process fastq files from Genotyping of Targeted
 Imports:
     dplyr,
     parallel,
-    rslurm,
     readr,
     methods,
     stats,
@@ -20,7 +19,9 @@ Imports:
     Biostrings,
     graphics,
     reticulate,
-    lme4
+    lme4,
+    RANN,
+    data.table
 License: CC BY-NC 4.0
 Encoding: UTF-8
 LazyData: true
