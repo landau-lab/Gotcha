@@ -21,7 +21,7 @@
                   mutation.start = 31,
                   mutation.end = 34,
                   max.distance = 2,
-                  rewrite = T
+                  rewrite = T)
 }
 %- maybe also 'usage' for other objects documented here.
 \arguments{

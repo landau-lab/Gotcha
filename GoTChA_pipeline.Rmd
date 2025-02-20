@@ -1,0 +1,86 @@
+---
+title: "GoTChA_pipeline"
+output: html_document
+---
+
+# Running Gotcha with parallel computing in slurm
+
+This is a tutorial for processing [GoT-ChA](https://www.biorxiv.org/content/10.1101/2022.05.11.491515v1.full.pdf) genotyping libraries. The Gotcha R package required for this tutorial can be downloaded [here](https://github.com/landau-lab/Gotcha) 
+
+## Use of BatchMutationCalling function
+
+### First, we load the Gotcha R library and rslurm:
+
+```{r}
+library(Gotcha)
+```
+
+
+### We are now ready to run the pipeline
+
+```{r}
+# Split the fastq files in chunks to allow for parallel processing and filter out reads that contain low quality scores,
+# particularly at the mutation site of interest
+
+path <- "/sc/arion/projects/MDS/noelle/gotcha_pipeline_nwheeler/Gotcha_test_pipeline/GoTChA_test_data/"
+
+FastqFiltering(out = path, min.quality = 15, which.read = "R1", ncores = 1, read.region = 15, min.bases= 5)
+
+FastqSplit(path = path, out = path, reads = 5e+05, ncores = 12)
+
+# Run Gotcha with parallel computing: submit one function call (1 core) per fastq chunk
+BatchMutationCalling(out  = path,
+                     which.read = "R1",
+                     mutation.start = 1, # take the whole read
+                     mutation.end = 50,
+                     barcodes.file.path = "/sc/arion/projects/MDS/noelle/gotcha_pipeline_nwheeler/Gotcha_test_pipeline/CBNN_0_singlecell.csv",
+                     wt.sequence = "GCATGTATGCAATGCCTTGGTAGGAATGGGACAGGTGTAGGATGGAAAAT",
+                     mut.sequence= "AAGGCGTTTCTTCTCTGACCGCACAACTGGGGCCTGGGGGGCTCCAAAGC",
+                     wt.max.mismatch = 0, # set up on perfect matching for increased accuracy
+                     mut.max.mismatch = 0,
+                     ncores = 44,
+                     rewrite = FALSE,
+                     testing = TRUE,
+                     max.distance = 2 
+)
+
+```
+
+### Once the submitted jobs are completed, we can merge the outputs into one single data frame using the MergeMutationCalling function. 
+```{r}
+# Merge output from each BatchMutationCalling job. 
+# Generate a new folder containing a .Rdata class object that can be directly loaded into R
+MergeMutationCalling(out = path)
+```
+
+### We can then load the output from the MutationCalling function
+```{r}
+out_collapsed_tet2 <- readRDS("/sc/arion/projects/MDS/noelle/gotcha_pipeline_nwheeler/Gotcha_test_pipeline/GoTChA_test_data/Split/Filtered/MergedOuts/outs.collapsed.Rdata")
+out_collapsed_tet2$Sample <- "FRIZ01"
+```
+
+### Filter to barcodes of interest for genotyping - those used in the ATAC seurat object
+### This is not strictly necessary, you could also genotype all of your cells
+```{r}
+FRIZ01_seurat_obj <- LoadH5Seurat("/sc/arion/projects/MDS/noelle/gotcha_pipeline_nwheeler/Gotcha_test_pipeline/FRIZ01_CD56C_filt.h5Seurat")
+cell_barcodes_filt <- Cells(FRIZ01_seurat_obj)
+# subset to those barcodes
+out_collapsed_tet2_filt  <- out_collapsed_tet2[which(out_collapsed_tet2$matched_barcodes %in% cell_barcodes_filt),]
+# set column names for input to genotyping function
+colnames(out_collapsed_tet2_filt) <- c("WhiteListMatch", "WTcount", "MUTcount", "MUTfraction", "Sample")
+write.csv(out_collapsed_tet2_filt, "/sc/arion/projects/MDS/noelle/gotcha_pipeline_nwheeler/out_collapsed_tet2_filt.csv")
+```
+
+
+### And run the GotchaLabeling function for noise correction and genotype labeling
+
+## Noise Correction and Genotype Labeling
+```{r}
+#Use wild type and mutant read counts to predict genotype
+genotypes_tet2 <- GotchaLabeling(path = "/sc/arion/projects/MDS/noelle/gotcha_pipeline_nwheeler/", infile = "out_collapsed_tet2_filt.csv", gene_id = "TET2", sample_id = "FRIZ01_TET2") # output is in 'path'/FRIZ01_TET2
+```
+
+### A folder named 'FRIZ01_TET2' (sample_id) is created in the path containing the output from genotyping!!
+### Genotype calls will be in file 'FRIZ01_TET2/FRIZ01_TET2_genotype_labels.csv'
+
+

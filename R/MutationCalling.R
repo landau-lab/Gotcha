@@ -1,21 +1,10 @@
-#' Define read genotype and read counts per genotype for each cell barcode
-#' @param out Path to the fastq or filtered fastq files
-#' @param barcodes.file.path Path to the file containing the cell barcodes detected in the experiment
-#' @param wt.max.mismatch Integer indicating the number of accepted missmatches when performing pattern matching for the wild-type sequence
-#' @param mut.max.mismatch Integer indicating the number of accepted missmatches when performing pattern matching for the mutant sequence
-#' @param ncores Integer indicating the number of cores to use for parallel processing
-#' @param reverse.complement Whether to take the reverse complement of the cell barcodes
-#' @param testing Logical indicating whether to sample the first 1,000 reads for testing the function
-#' @param which.read Which read to select to look for the mutation site
-#' @param wt.sequence Character vector of length one specifying the expected wild-type sequence
-#' @param mut.sequence Character vector of length one specifying the expected mutant sequence
-#' @param mutation.start Position in which the expected wild-type or mutant sequence starts in the read
-#' @param mutation.end Position in which the expected wild-type or mutant sequence ends in the read
-#' @param max.distance Maximum number of mismatches allowed between barcodes and whitelist
-#' @return output Datatable with barcode and genotype calls
 
-
-# Helper functions
+#' helper function to process fastqs
+#' @param out Path to the fastq files
+#' @param pattern suffix to search for files in the directory
+#' @param ncores number of cores to use with parallel processing
+#' @return Datatable with information from fastq files
+#'
 read_and_process_fastq <- function(path, pattern, ncores) {
   fastq_files <- dir(path, pattern = pattern, full.names = TRUE)
   if (length(fastq_files) == 0) stop("No fastq files detected.")
@@ -27,13 +16,25 @@ read_and_process_fastq <- function(path, pattern, ncores) {
   return(res)
 }
 
-subset_for_testing <- function(fastq_data, max_reads = 1000, ncores) {
+
+#' helper function to subset fastqs
+#' @param fastq_data Datatable with fastq data
+#' @param max_reads number of reads to subset
+#' @param ncores number of cores to use with parallel processing
+#' @return Datatable with subsetted fastq data
+#'
+subset_for_testing <- function(fastq_data, max_reads = 10000, ncores) {
   mclapply(fastq_data, function(dt) {
     if (nrow(dt) > max_reads) dt[1:max_reads, ] else dt
   }, mc.cores = ncores)
 }
 
-convert_to_numeric_matrix <- function(input, order) {
+
+#' helper function to convert barcodes to numerical matrix for RANN clustering
+#' @param input Datatable with barcodes for each read
+#' @return Datatable with barcodes converted to integers
+#'
+convert_to_numeric_matrix <- function(input) {
   # Convert each character in the barcode to a numeric value
   char_to_num <- c(A = 1, C = 2, G = 3, T = 4)
   numeric_matrix <- t(sapply(input, function(x) {
@@ -46,6 +47,11 @@ convert_to_numeric_matrix <- function(input, order) {
   return(numeric_matrix)
 }
 
+
+#' same as previous function but barcode letters converted to different integers
+#' @param input Datatable with barcodes for each read
+#' @return Datatable with barcodes converted to integers
+#'
 convert_to_numeric_matrix_reorder <- function(input) {
   char_to_num <- c(A = 1, T = 2, C = 3, G = 4)
   numeric_matrix <- t(sapply(input, function(x) {
@@ -57,6 +63,11 @@ convert_to_numeric_matrix_reorder <- function(input) {
   return(numeric_matrix)
 }
 
+
+#' read in file with barcode whitelist
+#' @param filepath path of barcode whitlist
+#' @return list of whitelist barcodes
+#'
 load_whitelist <- function(file_path) {
   if (!file.exists(file_path)) stop("Whitelist file not found: ", file_path)
   whitelist_data <- fread(file_path)
@@ -71,8 +82,15 @@ load_whitelist <- function(file_path) {
   return(unique(whitelist))
 }
 
-# input is list of barcodes, whitelist and number of nearest neighbor desired
-# output a matrix where each row
+
+#' perform RANN clustering to find which whitelist barcodes are closest to gotcha barcodes
+#' @param barcodes Datatable with gotcha barcodes
+#' @param whitelist Datatable with whitelist barcodes
+#' @param order Integer specifying which function to convert barcodes to numeric matrix
+#' @param radius radius with nearest neighbor RANN clustering
+#' @param nearest_neighbors number of nearest neighbors to use in RANN clustering
+#' @return Matrix with closest barcodes from whitelist
+#'
 rann_matching <- function(barcodes, whitelist, order, radius, nearest_neighbors) {
   # Convert barcodes and whitelist to numeric matrices
   if (order ==1){
@@ -98,8 +116,11 @@ rann_matching <- function(barcodes, whitelist, order, radius, nearest_neighbors)
   return(mapped_matrix)
 }
 
-# for each barcode will output "too many matches" if too many have 1 mismatch
-# otherwise output original barcode
+#' perform hamming match. check if barcode has more than one whitelist entry with one mismatch
+#' @param barcodes gotcha barcode
+#' @param whitelist list of whitelist barcodes
+#' @return the original barcode character or "Too many matches" if there are mult match with hamming dis=1
+#'
 hamming_too_many_match <- function(barcodes, whitelist) {
   # get number of mismatches between strings
   dist_mat <- stringdistmatrix(barcodes, unique(whitelist), method = "hamming")
@@ -109,6 +130,17 @@ hamming_too_many_match <- function(barcodes, whitelist) {
   return(barcodes)
 }
 
+#' perform genotyping of reads
+#' @param reads gotcha barcode
+#' @param wt_seq Character vector of length one specifying the expected wild-type sequence
+#' @param mut_seq Character vector of length one specifying the expected mutant sequence
+#' @param mutation_start Position in which the expected wild-type or mutant sequence starts in the read
+#' @param mutation_end Position in which the expected wild-type or mutant sequence ends in the read
+#' @param wt_max_mismatch Integer indicating the number of accepted missmatches when performing pattern matching for the wild-type sequence
+#' @param mut_max_mismatch Integer indicating the number of accepted missmatches when performing pattern matching for the mutant sequence
+#' @param ncores number of cores to use for parallel processing
+#' @return Datatable with read and genotype call
+#'
 genotype_reads <- function(reads, wt_seq, mut_seq, mutation_start, mutation_end, wt_max_mismatch, mut_max_mismatch, ncores) {
   mclapply(reads, function(read) {
     wt_count <- vcountPattern(wt_seq, substr(read, mutation_start, mutation_end), max.mismatch = wt_max_mismatch)
@@ -120,11 +152,27 @@ genotype_reads <- function(reads, wt_seq, mut_seq, mutation_start, mutation_end,
   }, mc.cores = ncores)
 }
 
-# Main function
-MutationCalling <- function(out, barcodes.file.path, wt.max.mismatch = 0, mut.max.mismatch = 0,
-                            ncores = 1, reverse.complement = TRUE, testing = FALSE, which.read = "R1",
-                            wt.sequence = "CGG", mut.sequence = "CAG", mutation.start = 31,
-                            mutation.end = 34, max.distance = 2) {
+
+#' Define read genotype and read counts per genotype for each cell barcode
+#' @param out Path to the fastq or filtered fastq files
+#' @param barcodes.file.path Path to the file containing the cell barcodes detected in the experiment
+#' @param wt.max.mismatch Integer indicating the number of accepted missmatches when performing pattern matching for the wild-type sequence
+#' @param mut.max.mismatch Integer indicating the number of accepted missmatches when performing pattern matching for the mutant sequence
+#' @param ncores Integer indicating the number of cores to use for parallel processing
+#' @param reverse.complement Whether to take the reverse complement of the cell barcodes
+#' @param testing Logical indicating whether to sample the first 10,000 reads for testing the function
+#' @param which.read Which read to select to look for the mutation site
+#' @param wt.sequence Character vector of length one specifying the expected wild-type sequence
+#' @param mut.sequence Character vector of length one specifying the expected mutant sequence
+#' @param mutation.start Position in which the expected wild-type or mutant sequence starts in the read
+#' @param mutation.end Position in which the expected wild-type or mutant sequence ends in the read
+#' @param max.distance Maximum number of mismatches allowed between barcodes and whitelist
+#' @return output Datatable with barcode and genotype calls
+#'
+MutationCalling <- function(out = "/path_to_filtered_fastqs/", barcodes.file.path = "/path_to_whitelist/whitelist.txt",
+                            wt.max.mismatch = 0, mut.max.mismatch = 0, ncores = 1, reverse.complement = TRUE,
+                            testing = FALSE, which.read = "R1", wt.sequence = "CGG", mut.sequence = "CAG",
+                            mutation.start = 31, mutation.end = 34, max.distance = 2) {
 
   # make output file
   out_file <- paste0(out, "out.log")
@@ -137,7 +185,7 @@ MutationCalling <- function(out, barcodes.file.path, wt.max.mismatch = 0, mut.ma
   whitelist <- whitelist[whitelist != "NO_BARCODE"]
   # Load FASTQ files
   fastq_data <- read_and_process_fastq(out, pattern = ".fastq.gz", ncores = ncores)
-  if (testing) fastq_data <- subset_for_testing(fastq_data, max_reads = 1000, ncores = ncores)
+  if (testing) fastq_data <- subset_for_testing(fastq_data, max_reads = 10000, ncores = ncores)
   cat(paste0("------- FASTQ FILES LOADED ", chunk_name ," -------"), file=out_file, sep = "\n", append=TRUE)
   # Process sequences
   barcodes <- fastq_data[[grep(names(fastq_data), pattern = "_R2_")]]
