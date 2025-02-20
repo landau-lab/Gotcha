@@ -15,5 +15,5 @@
 module load R/4.2.0
 module load nlopt
 
-Rscript GoTChA_test_full_FastqSplit.R
+Rscript GoTChA_FastqSplit.R
 

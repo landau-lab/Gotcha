@@ -3,7 +3,7 @@
 #BSUB -P acc_MDS 
 #BSUB -q premium
 #BSUB -n 1
-#BSUB -W 2:00
+#BSUB -W 3:00
 #BSUB -R rusage[mem=130GB]
 #BSUB -R span[hosts=1] 
 #BSUB -oo %J.stdout
@@ -15,5 +15,5 @@
 module load R/4.2.0
 module load nlopt
 
-Rscript GoTChA_test_full_FastqFilt.R
+Rscript GoTChA_FastqFilt.R
 
