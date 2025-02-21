@@ -3,18 +3,17 @@ title: "GoTChA_pipeline"
 output: html_document
 ---
 
-# Running Gotcha with parallel computing in slurm
+# Running Gotcha with parallel computing without using rslurm
 
 This is a tutorial for processing [GoT-ChA](https://www.biorxiv.org/content/10.1101/2022.05.11.491515v1.full.pdf) genotyping libraries. The Gotcha R package required for this tutorial can be downloaded [here](https://github.com/landau-lab/Gotcha) 
 
 ## Use of BatchMutationCalling function
 
-### First, we load the Gotcha R library and rslurm:
+### First, we load the Gotcha R library:
 
 ```{r}
 library(Gotcha)
 ```
-
 
 ### We are now ready to run the pipeline
 
