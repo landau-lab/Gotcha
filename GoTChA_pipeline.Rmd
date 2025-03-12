@@ -12,8 +12,7 @@ This is a tutorial for processing [GoT-ChA](https://www.biorxiv.org/content/10.1
 ### First, we load the Gotcha R library:
 
 ```{r}
-#library(Gotcha) # install branch that 
-devtools::install_github(repo = "landau-lab/Gotcha", ref = "run_lsf")
+devtools::install_github(repo = "landau-lab/Gotcha", ref = "run_lsf") # install branch that doesn't use rslurm
 ```
 
 ### We are now ready to run the pipeline
