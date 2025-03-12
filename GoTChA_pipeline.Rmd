@@ -5,23 +5,23 @@ output: html_document
 
 # Running Gotcha with parallel computing without using rslurm
 
-This is a tutorial for processing [GoT-ChA](https://www.biorxiv.org/content/10.1101/2022.05.11.491515v1.full.pdf) genotyping libraries. The Gotcha R package required for this tutorial can be downloaded [here](https://github.com/landau-lab/Gotcha) 
+This is a tutorial for processing [GoT-ChA](https://www.biorxiv.org/content/10.1101/2022.05.11.491515v1.full.pdf) genotyping libraries. The Gotcha R package required for this tutorial can be downloaded [here](https://github.com/landau-lab/Gotcha/tree/run_lsf) 
 
 ## Use of BatchMutationCalling function
 
 ### First, we load the Gotcha R library:
 
 ```{r}
-library(Gotcha)
+#library(Gotcha) # install branch that 
+devtools::install_github(repo = "landau-lab/Gotcha", ref = "run_lsf")
 ```
 
 ### We are now ready to run the pipeline
-
 ```{r}
 # Split the fastq files in chunks to allow for parallel processing and filter out reads that contain low quality scores,
 # particularly at the mutation site of interest
 
-path <- "/sc/arion/projects/MDS/noelle/gotcha_pipeline_nwheeler/Gotcha_test_pipeline/GoTChA_test_data/"
+path <- "/test_path/GoTChA_test/data/"
 
 FastqFiltering(out = path, min.quality = 15, which.read = "R1", ncores = 1, read.region = 15, min.bases= 5)
 
@@ -32,7 +32,7 @@ BatchMutationCalling(out  = path,
                      which.read = "R1",
                      mutation.start = 1, # take the whole read
                      mutation.end = 50,
-                     barcodes.file.path = "/sc/arion/projects/MDS/noelle/gotcha_pipeline_nwheeler/Gotcha_test_pipeline/CBNN_0_singlecell.csv",
+                     barcodes.file.path = "/test_path/GoTChA_test/cellranger_output/CBNN_0_singlecell.csv",
                      wt.sequence = "GCATGTATGCAATGCCTTGGTAGGAATGGGACAGGTGTAGGATGGAAAAT",
                      mut.sequence= "AAGGCGTTTCTTCTCTGACCGCACAACTGGGGCCTGGGGGGCTCCAAAGC",
                      wt.max.mismatch = 0, # set up on perfect matching for increased accuracy
@@ -42,7 +42,6 @@ BatchMutationCalling(out  = path,
                      testing = TRUE,
                      max.distance = 2 
 )
-
 ```
 
 ### Once the submitted jobs are completed, we can merge the outputs into one single data frame using the MergeMutationCalling function. 
@@ -54,20 +53,20 @@ MergeMutationCalling(out = path)
 
 ### We can then load the output from the MutationCalling function
 ```{r}
-out_collapsed_tet2 <- readRDS("/sc/arion/projects/MDS/noelle/gotcha_pipeline_nwheeler/Gotcha_test_pipeline/GoTChA_test_data/Split/Filtered/MergedOuts/outs.collapsed.Rdata")
-out_collapsed_tet2$Sample <- "FRIZ01"
+out_collapsed_tet2 <- readRDS("/test_path/GoTChA_test/data/Split/Filtered/MergedOuts/outs.collapsed.Rdata")
+out_collapsed_tet2$Sample <- "TET2_relapse"
 ```
 
 ### Filter to barcodes of interest for genotyping - those used in the ATAC seurat object
 ### This is not strictly necessary, you could also genotype all of your cells
 ```{r}
-FRIZ01_seurat_obj <- LoadH5Seurat("/sc/arion/projects/MDS/noelle/gotcha_pipeline_nwheeler/Gotcha_test_pipeline/FRIZ01_CD56C_filt.h5Seurat")
-cell_barcodes_filt <- Cells(FRIZ01_seurat_obj)
+seurat_obj <- LoadH5Seurat("/test_path/GoTChA_test/analysis/gotcha_seurat_obj.h5Seurat")
+cell_barcodes_filt <- Cells(seurat_obj)
 # subset to those barcodes
 out_collapsed_tet2_filt  <- out_collapsed_tet2[which(out_collapsed_tet2$matched_barcodes %in% cell_barcodes_filt),]
 # set column names for input to genotyping function
 colnames(out_collapsed_tet2_filt) <- c("WhiteListMatch", "WTcount", "MUTcount", "MUTfraction", "Sample")
-write.csv(out_collapsed_tet2_filt, "/sc/arion/projects/MDS/noelle/gotcha_pipeline_nwheeler/out_collapsed_tet2_filt.csv")
+write.csv(out_collapsed_tet2_filt, "/test_path/GoTChA_test/out_collapsed_tet2_filt.csv")
 ```
 
 
@@ -76,10 +75,10 @@ write.csv(out_collapsed_tet2_filt, "/sc/arion/projects/MDS/noelle/gotcha_pipelin
 ## Noise Correction and Genotype Labeling
 ```{r}
 #Use wild type and mutant read counts to predict genotype
-genotypes_tet2 <- GotchaLabeling(path = "/sc/arion/projects/MDS/noelle/gotcha_pipeline_nwheeler/", infile = "out_collapsed_tet2_filt.csv", gene_id = "TET2", sample_id = "FRIZ01_TET2") # output is in 'path'/FRIZ01_TET2
+obj_ignore_out <- GotchaLabeling(path = "/test_path/GoTChA_test/", infile = "out_collapsed_tet2_filt.csv", gene_id = "TET2", sample_id = "TET2_RELAPSE") # output is in 'path'/TET2_RELAPSE
 ```
 
-### A folder named 'FRIZ01_TET2' (sample_id) is created in the path containing the output from genotyping!!
-### Genotype calls will be in file 'FRIZ01_TET2/FRIZ01_TET2_genotype_labels.csv'
+### A folder named 'TET2_RELAPSE' (sample_id) is created in the path containing the output from genotyping!!
+### Genotype calls will be in file 'TET2_RELAPSE/TET2_RELAPSE_genotype_labels.csv'
 
 
