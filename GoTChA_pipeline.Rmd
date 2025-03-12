@@ -12,10 +12,11 @@ This is a tutorial for processing [GoT-ChA](https://www.biorxiv.org/content/10.1
 ### First, we load the Gotcha R library:
 
 ```{r}
-devtools::install_github(repo = "landau-lab/Gotcha", ref = "run_lsf") # install branch that doesn't use rslurm
+devtools::install_github(repo = "landau-lab/Gotcha", ref = "run_lsf") # install from branch that doesn't use rslurm
 ```
 
 ### We are now ready to run the pipeline
+These functions can run for hours - it is recommended to submit as Rscript job if possible
 ```{r}
 # Split the fastq files in chunks to allow for parallel processing and filter out reads that contain low quality scores,
 # particularly at the mutation site of interest
@@ -27,19 +28,20 @@ FastqFiltering(out = path, min.quality = 15, which.read = "R1", ncores = 1, read
 FastqSplit(path = path, out = path, reads = 5e+05, ncores = 12)
 
 # Run Gotcha with parallel computing: submit one function call (1 core) per fastq chunk
+# this will take a few hours
 BatchMutationCalling(out  = path,
-                     which.read = "R1",
-                     mutation.start = 1, # take the whole read
+                     which.read = "R1", # which read has mutation
+                     mutation.start = 1, # take the whole read (1-50 bp)
                      mutation.end = 50,
                      barcodes.file.path = "/test_path/GoTChA_test/cellranger_output/CBNN_0_singlecell.csv",
                      wt.sequence = "GCATGTATGCAATGCCTTGGTAGGAATGGGACAGGTGTAGGATGGAAAAT",
                      mut.sequence= "AAGGCGTTTCTTCTCTGACCGCACAACTGGGGCCTGGGGGGCTCCAAAGC",
                      wt.max.mismatch = 0, # set up on perfect matching for increased accuracy
                      mut.max.mismatch = 0,
-                     ncores = 44,
-                     rewrite = FALSE,
-                     testing = TRUE,
-                     max.distance = 2 
+                     ncores = 44, # will run 44 fastq chunks in parallel
+                     rewrite = FALSE, # don't rewrite previously saved chunks
+                     testing = TRUE, # subset for testing
+                     max.distance = 2 # allow two mismatches between sequenced barcodes and barcode whitelist
 )
 ```
 
@@ -73,7 +75,7 @@ write.csv(out_collapsed_tet2_filt, "/test_path/GoTChA_test/out_collapsed_tet2_fi
 
 ## Noise Correction and Genotype Labeling
 ```{r}
-#Use wild type and mutant read counts to predict genotype
+# Use wild type and mutant read counts to predict genotype
 obj_ignore_out <- GotchaLabeling(path = "/test_path/GoTChA_test/", infile = "out_collapsed_tet2_filt.csv", gene_id = "TET2", sample_id = "TET2_RELAPSE") # output is in 'path'/TET2_RELAPSE
 ```
 
