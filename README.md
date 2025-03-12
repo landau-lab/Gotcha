@@ -1,9 +1,9 @@
 # [GoT-ChA](https://www.biorxiv.org/content/10.1101/2022.05.11.491515v1): Genotyping of Targeted loci with single-cell Chromatin Accessibility
 
-## This is test development to update the gotcha pipeline for use without rslurm
+## This is test development to update the gotcha pipeline for use without rslurm 
 
 ### Installation
-The Gotcha R package is currently in beta. To install the release version without rslurm:
+The Gotcha R package is currently in beta. To install the release version without slurm workload manager:
 
 > devtools::install_github(repo = "landau-lab/Gotcha", ref = "run_lsf")
 
