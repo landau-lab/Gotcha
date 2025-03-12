@@ -3,11 +3,7 @@
 ## This is test development to update the gotcha pipeline for use without rslurm 
 
 ### Installation
-<<<<<<< HEAD
 The Gotcha R package is currently in beta. To install the release version without slurm requirement:
-=======
-The Gotcha R package is currently in beta. To install the release version without slurm workload manager:
->>>>>>> 58188d5cf592c3483814252c9d3cb211077dd20d
 
 > devtools::install_github(repo = "landau-lab/Gotcha", ref = "run_lsf")
 
