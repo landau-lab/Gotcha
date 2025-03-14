@@ -6,6 +6,7 @@
 To install the release version without SLURM requirement:
 >if (!require("devtools", quietly = TRUE))
 >  install.packages("devtools")
+>
 > devtools::install_github(repo = "landau-lab/Gotcha", ref = "multi_os_compatible")
 
 ### Tutorials (more coming soon...)
