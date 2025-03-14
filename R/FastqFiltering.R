@@ -1,38 +1,14 @@
-FastqFiltering = function(path, out="/path_to_fastqs/", 
-						reads = 2000000, 
-                        min.quality = 15,
-                        min.bases = 1,
-                        which.read = "R1",
-                        read.region = NULL,
-                        ncores = 1){
+FastqFiltering = function(out = "/path_to_fastqs/",
+                          min.quality = 15,
+                          min.bases = 1,
+                          which.read = "R1",
+                          read.region = NULL,
+                          ncores = 1){
 
-  message("------- STARTING FASTQSPLIT -------")
-  message("------- CREATING FILE INDEX -------")
-
-  file.index = dir(path, pattern = ".fastq.gz")
-
-  if(length(file.index)==0){
-    stop("No fastq files detected in path folder")
-  }
-
-  message("------- CREATING OUTPUT FOLDER -------")
-
-  if(!file.exists(paste0(out,"Split"))){
-    out.create = paste0('mkdir ',out,"Split")
-    system(command = out.create)
-  }
-
-  message("------- SPLITTING FASTQS -------")
-
-  mclapply(file.index, function(x){
-    system(paste0("gunzip -c ",path,"/",x," | split - -l ",format(reads*4,scientific=F)," --filter='gzip -f - > $FILE.gz' ",out,"Split/Split_ --additional-suffix _", gsub(x, pattern = ".fastq.gz", replacement = ""), ".fastq"))
-  },mc.cores = ncores)
-
-  message("------- DONE! -------")
-  
   message("------- BEGIN FASTQ FILTERING FUNCTION -------")
 
   out = paste0(out,"Split/")
+  if (!dir.exists(out)) {message("ERROR: DIRECTORY ",out ," DOES NOT EXIST")}
 
   # get fastq file names
   fastq.files = as.list(dir(path = out, pattern = ".fastq.gz"))
@@ -92,7 +68,7 @@ FastqFiltering = function(path, out="/path_to_fastqs/",
   mclapply(unique(chunk.index), function(x) {
     selected = grep(names(filter.files), pattern = paste0("_", x,"_"), value = T)
     lapply(selected, function(y){
-      writeFastq(object = filter.files[[y]], file = paste0(out,"Filtered/",x,"/filtered_bq",min.quality,"_bn",min.bases,"_",y), mode = "a")
+      writeFastq(object = filter.files[[y]], file = paste0(out,"Filtered/",x,"/filtered_bq",min.quality,"_bn",min.bases,"_",y))
     })
   }, mc.cores = ncores)
 
@@ -100,5 +76,4 @@ FastqFiltering = function(path, out="/path_to_fastqs/",
   message("------- mean number of filtered reads = ", mean(unlist(lapply(filter.files, length))))
   message("------- % of remaining reads after filtering= ", round(mean(unlist(lapply(filter.files, length))/length(orig.files[[1]])*100),3)," +/- ", round(sd(unlist(lapply(filter.files, length))/length(orig.files[[1]])*100),3)," (mean +/- sd)")
   message("------- FASTQ FILTERING FUNCTION COMPLETE -------")
-  
 }

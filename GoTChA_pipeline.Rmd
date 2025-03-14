@@ -3,109 +3,83 @@ title: "GoTChA_pipeline"
 output: html_document
 ---
 
-# Running Gotcha with parallel computing in slurm
+# Running Gotcha with parallel computing without using rslurm
 
-This is a tutorial for processing [GoT-ChA](https://www.biorxiv.org/content/10.1101/2022.05.11.491515v1.full.pdf) genotyping libraries. The Gotcha R package required for this tutorial can be downloaded [here](https://github.com/landau-lab/Gotcha) 
+This is a tutorial for processing [GoT-ChA](https://www.biorxiv.org/content/10.1101/2022.05.11.491515v1.full.pdf) genotyping libraries.
 
 ## Use of BatchMutationCalling function
 
-### First, we load the Gotcha R library and rslurm:
+### First, we load the Gotcha R library:
 
 ```{r}
-library(Gotcha)
-library(rslurm)
+devtools::install_github(repo = "landau-lab/Gotcha", ref = "multi_os_compatible") # install from branch that doesn't use rslurm
 ```
-
-### Then, we can define the paths and inputs for the pipeline
-
-```{r}
-path_to_fastqs = "/gpfs/commons/home/tbotella/GOTCHA/MPN15_16_CMP53/MPN15/gotcha_fastqs"
-path_out = "/gpfs/commons/home/tbotella/GOTCHA/MPN15_16_CMP53/MPN15/gotcha_fastqs/outs"
-
-barcodes.file.path = "/gpfs/commons/home/tbotella/GOTCHA/MPN15_16_CMP53/MPN15/MPN15_new_ATAC/outs/singlecell.csv"
-
-which.read = "R3"
-
-read.region = c(34:37)
-mutation.start = 34
-mutation.end = 37
-
-primer.sequence = "AAAGCCTGTAGTTTTACTTACTCTCGTCTCCACA"
-
-wt.sequence = "GAC" 
-mut.sequence= "GAA"
-
-sample_id = "MPN15"
-gene_id = "JAK2"
-```
-
-
 
 ### We are now ready to run the pipeline
-
+These functions can run for hours - it is recommended to submit as Rscript job if possible
 ```{r}
 # Split the fastq files in chunks to allow for parallel processing and filter out reads that contain low quality scores,
 # particularly at the mutation site of interest
-FastqFiltering(
-   path = path_to_fastqs,
-   out = path_out,
-   reads = 250000,
-   min.quality = 15,
-   min.bases = 1,
-   which.read = which.read,
-   read.region = read.region,
-   ncores = 19
-   )
- 
 
-if (which.read == "R3") {
-	which.read = "R2"
-	print('--Changed which.read to "R2"--')
-}
+path <- "/test_path/GoTChA_test/data/"
 
-# Run Gotcha with parallel computing in slurm: submit one cluster job per fastq chunk
-BatchMutationCalling(out  = path_out,
-                     barcodes.file.path = barcodes.file.path,
-                     wt.max.mismatch = 0, 
-                     mut.max.mismatch = 0, 
-                     keep.raw.reads = F, 
-                     reverse.complement = T, 
-                     testing = F,
-                     which.read = which.read, 
-                     primer.sequence = primer.sequence, 
-                     primed.max.mismatch = 3, 
-                     wt.sequence = wt.sequence, 
-                     mut.sequence = mut.sequence,
-                     mutation.start = mutation.start,
-                     mutation.end = mutation.end,
-                     soptions = list(output=paste0('GoT_','%x_%j.log'),mem = '10g', 'cpus-per-task' = 5) 
+FastqFiltering(out = path, min.quality = 15, which.read = "R1", ncores = 1, read.region = 15, min.bases= 5)
+
+FastqSplit(path = path, out = path, reads = 5e+05, ncores = 12)
+
+# Run Gotcha with parallel computing: submit one function call (1 core) per fastq chunk
+# this will take a few hours
+BatchMutationCalling(out  = path,
+                     which.read = "R1", # which read has mutation
+                     mutation.start = 1, # take the whole read (1-50 bp)
+                     mutation.end = 50,
+                     barcodes.file.path = "/test_path/GoTChA_test/cellranger_output/CBNN_0_singlecell.csv",
+                     wt.sequence = "GCATGTATGCAATGCCTTGGTAGGAATGGGACAGGTGTAGGATGGAAAAT",
+                     mut.sequence= "AAGGCGTTTCTTCTCTGACCGCACAACTGGGGCCTGGGGGGCTCCAAAGC",
+                     wt.max.mismatch = 0, # set up on perfect matching for increased accuracy
+                     mut.max.mismatch = 0,
+                     ncores = 44, # will run 44 fastq chunks in parallel
+                     rewrite = FALSE, # don't rewrite previously saved chunks
+                     testing = TRUE, # subset for testing
+                     max.distance = 2 # allow two mismatches between sequenced barcodes and barcode whitelist
 )
-
 ```
 
 ### Once the submitted jobs are completed, we can merge the outputs into one single data frame using the MergeMutationCalling function. 
 ```{r}
-#Merge output from each BatchMutationCalling job. 
-#Generate a new folder containing a .Rdata class object that can be directly loaded into R
-MergeMutationCalling(out = path_out)
+# Merge output from each BatchMutationCalling job. 
+# Generate a new folder containing a .Rdata class object that can be directly loaded into R
+MergeMutationCalling(out = path)
 ```
 
 ### We can then load the output from the MutationCalling function
 ```{r}
-load(paste0(path_out,'Split/Filtered/MergedOuts/outs.collapsed.Rdata'))
-outs.collapse$Sample = sample_id
-write.csv(outs.collapse,paste0(path_out,'/metadata_',sample_id,'.csv'), row.names = T)
+out_collapsed_tet2 <- readRDS("/test_path/GoTChA_test/data/Split/Filtered/MergedOuts/outs.collapsed.Rdata")
+out_collapsed_tet2$Sample <- "TET2_relapse"
 ```
+
+### Filter to barcodes of interest for genotyping - those used in the ATAC seurat object
+### This is not strictly necessary, you could also genotype all of your cells
+```{r}
+seurat_obj <- LoadH5Seurat("/test_path/GoTChA_test/analysis/gotcha_seurat_obj.h5Seurat")
+cell_barcodes_filt <- Cells(seurat_obj)
+# subset to those barcodes
+out_collapsed_tet2_filt  <- out_collapsed_tet2[which(out_collapsed_tet2$matched_barcodes %in% cell_barcodes_filt),]
+# set column names for input to genotyping function
+colnames(out_collapsed_tet2_filt) <- c("WhiteListMatch", "WTcount", "MUTcount", "MUTfraction", "Sample")
+write.csv(out_collapsed_tet2_filt, "/test_path/GoTChA_test/out_collapsed_tet2_filt.csv")
+```
+
 
 ### And run the GotchaLabeling function for noise correction and genotype labeling
 
 ## Noise Correction and Genotype Labeling
 ```{r}
-#Use wild type and mutant read counts to predict genotype
-gotcha_labels <- GotchaLabeling(path=paste0(path_out,'/'), infile = paste0('metadata_',sample_id,'.csv'), gene_id = gene_id, sample_id = sample_id)
+# Use wild type and mutant read counts to predict genotype
+obj_ignore_out <- GotchaLabeling(path = "/test_path/GoTChA_test/", infile = "out_collapsed_tet2_filt.csv", gene_id = "TET2", sample_id = "TET2_RELAPSE") # output is in 'path'/TET2_RELAPSE
+```
 
-saveRDS(gotcha_labels, paste0(path_out,'/gotcha_labels_',sample_id,'.Rds'))
-write.csv(as.data.frame(gotcha_labels), paste0(path_out,'/gotcha_labels_',sample_id,'.csv'))
-```
-```
+### A folder named 'TET2_RELAPSE' (sample_id) is created in the path containing the output from genotyping!!
+### Genotype calls will be in file 'TET2_RELAPSE/TET2_RELAPSE_genotype_labels.csv'
+
 

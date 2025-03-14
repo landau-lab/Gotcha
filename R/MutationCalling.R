@@ -1,216 +1,267 @@
+
+#' helper function to process fastqs
+#' @param out Path to the fastq files
+#' @param pattern suffix to search for files in the directory
+#' @param ncores number of cores to use with parallel processing
+#' @return Datatable with information from fastq files
+#'
+read_and_process_fastq <- function(path, pattern, ncores) {
+  fastq_files <- dir(path, pattern = pattern, full.names = TRUE)
+  if (length(fastq_files) == 0) stop("No fastq files detected.")
+  res = mclapply(fastq_files, function(file) {
+    temp <- readFastq(file)
+    as.data.table(sread(temp))
+  }, mc.cores = ncores)
+  names(res) = fastq_files
+  return(res)
+}
+
+
+#' helper function to subset fastqs
+#' @param fastq_data Datatable with fastq data
+#' @param max_reads number of reads to subset
+#' @param ncores number of cores to use with parallel processing
+#' @return Datatable with subsetted fastq data
+#'
+subset_for_testing <- function(fastq_data, max_reads = 10000, ncores) {
+  mclapply(fastq_data, function(dt) {
+    if (nrow(dt) > max_reads) dt[1:max_reads, ] else dt
+  }, mc.cores = ncores)
+}
+
+
+#' helper function to convert barcodes to numerical matrix for RANN clustering
+#' @param input Datatable with barcodes for each read
+#' @return Datatable with barcodes converted to integers
+#'
+convert_to_numeric_matrix <- function(input) {
+  # Convert each character in the barcode to a numeric value
+  char_to_num <- c(A = 1, C = 2, G = 3, T = 4)
+  numeric_matrix <- t(sapply(input, function(x) {
+         char_to_num[unlist(strsplit(x, ""))]
+     }))
+  dimnames(numeric_matrix) <- NULL
+  # convert na to 5
+  numeric_matrix[is.na(numeric_matrix)] <- 5
+  numeric_matrix <- as.data.table(numeric_matrix)
+  return(numeric_matrix)
+}
+
+
+#' same as previous function but barcode letters converted to different integers
+#' @param input Datatable with barcodes for each read
+#' @return Datatable with barcodes converted to integers
+#'
+convert_to_numeric_matrix_reorder <- function(input) {
+  char_to_num <- c(A = 1, T = 2, C = 3, G = 4)
+  numeric_matrix <- t(sapply(input, function(x) {
+    char_to_num[unlist(strsplit(x, ""))]
+  }))
+  dimnames(numeric_matrix) <- NULL
+  numeric_matrix[is.na(numeric_matrix)] <- 5
+  numeric_matrix <- as.data.table(numeric_matrix)
+  return(numeric_matrix)
+}
+
+
+#' read in file with barcode whitelist
+#' @param filepath path of barcode whitlist
+#' @return list of whitelist barcodes
+#'
+load_whitelist <- function(file_path) {
+  if (!file.exists(file_path)) stop("Whitelist file not found: ", file_path)
+  whitelist_data <- fread(file_path)
+  if ("barcode" %in% colnames(whitelist_data)) {
+    whitelist <- whitelist_data$barcode
+  } else {
+    # Assume a single-column CSV without a header
+    whitelist <- whitelist_data[[1]]
+  }
+  # Trim to consistent length if needed (e.g., 16 characters for 10x barcodes)
+  whitelist <- substr(whitelist, 1, 16)
+  return(unique(whitelist))
+}
+
+
+#' perform RANN clustering to find which whitelist barcodes are closest to gotcha barcodes
+#' @param barcodes Datatable with gotcha barcodes
+#' @param whitelist Datatable with whitelist barcodes
+#' @param order Integer specifying which function to convert barcodes to numeric matrix
+#' @param radius radius with nearest neighbor RANN clustering
+#' @param nearest_neighbors number of nearest neighbors to use in RANN clustering
+#' @return Matrix with closest barcodes from whitelist
+#'
+rann_matching <- function(barcodes, whitelist, order, radius, nearest_neighbors) {
+  # Convert barcodes and whitelist to numeric matrices
+  if (order ==1){
+    barcode_matrix <- convert_to_numeric_matrix(barcodes)
+    whitelist_matrix <- convert_to_numeric_matrix(whitelist)
+  } else{
+    barcode_matrix <- convert_to_numeric_matrix_reorder(barcodes)
+    whitelist_matrix <- convert_to_numeric_matrix_reorder(whitelist)
+  }
+  # Use RANN for nearest neighbor search
+  nn_results <- nn2(
+    data = whitelist_matrix,    # Whitelist data
+    query = barcode_matrix,     # Query barcodes
+    k = nearest_neighbors,      # Find num of nearest neighbor
+    searchtype = "radius",      # Use radius-based search
+    radius = radius       # Maximum allowed distance, will only allow for 2 mismatches
+  )
+  whitelist_ind <- nn_results$nn.idx
+  # convert 0 to NA
+  whitelist_ind <- replace(whitelist_ind, whitelist_ind==0, NA)
+  # return the nearest whitelist barcodes
+  mapped_matrix <- matrix(whitelist[whitelist_ind], nrow = nrow(nn_results$nn.idx), ncol = ncol(nn_results$nn.idx))
+  return(mapped_matrix)
+}
+
+#' perform hamming match. check if barcode has more than one whitelist entry with one mismatch
+#' @param barcodes gotcha barcode
+#' @param whitelist list of whitelist barcodes
+#' @return the original barcode character or "Too many matches" if there are mult match with hamming dis=1
+#'
+hamming_too_many_match <- function(barcodes, whitelist) {
+  # get number of mismatches between strings
+  dist_mat <- stringdistmatrix(barcodes, unique(whitelist), method = "hamming")
+  if (length(which(dist_mat==1)) > 1){
+    return("Too many matches")
+  }
+  return(barcodes)
+}
+
+#' perform genotyping of reads
+#' @param reads gotcha barcode
+#' @param wt_seq Character vector of length one specifying the expected wild-type sequence
+#' @param mut_seq Character vector of length one specifying the expected mutant sequence
+#' @param mutation_start Position in which the expected wild-type or mutant sequence starts in the read
+#' @param mutation_end Position in which the expected wild-type or mutant sequence ends in the read
+#' @param wt_max_mismatch Integer indicating the number of accepted missmatches when performing pattern matching for the wild-type sequence
+#' @param mut_max_mismatch Integer indicating the number of accepted missmatches when performing pattern matching for the mutant sequence
+#' @param ncores number of cores to use for parallel processing
+#' @return Datatable with read and genotype call
+#'
+genotype_reads <- function(reads, wt_seq, mut_seq, mutation_start, mutation_end, wt_max_mismatch, mut_max_mismatch, ncores) {
+  mclapply(reads, function(read) {
+    wt_count <- vcountPattern(wt_seq, substr(read, mutation_start, mutation_end), max.mismatch = wt_max_mismatch)
+    mut_count <- vcountPattern(mut_seq, substr(read, mutation_start, mutation_end), max.mismatch = mut_max_mismatch)
+    genotype <- ifelse(wt_count == 1 & mut_count == 1, "Ambiguous",
+                       ifelse(wt_count == 0 & mut_count == 0, "No information",
+                              ifelse(wt_count == 1 & mut_count == 0, "WT", "MUTANT")))
+    data.table(WT = wt_count, MUT = mut_count, Genotype = genotype)
+  }, mc.cores = ncores)
+}
+
+
 #' Define read genotype and read counts per genotype for each cell barcode
 #' @param out Path to the fastq or filtered fastq files
+#' @param barcodes.file.path Path to the file containing the cell barcodes detected in the experiment
 #' @param wt.max.mismatch Integer indicating the number of accepted missmatches when performing pattern matching for the wild-type sequence
 #' @param mut.max.mismatch Integer indicating the number of accepted missmatches when performing pattern matching for the mutant sequence
-#' @param keep.raw.reads Logical. Whether to return the raw reads in the output file. Defaults to false
 #' @param ncores Integer indicating the number of cores to use for parallel processing
 #' @param reverse.complement Whether to take the reverse complement of the cell barcodes
-#' @param testing Logical indicating whether to sample the first 1,000 reads for testing the function
+#' @param testing Logical indicating whether to sample the first 10,000 reads for testing the function
 #' @param which.read Which read to select to look for the mutation site
-#' @param primer.sequence Character vector of length one indicating the primer sequence
-#' @param primed.max.mismatch  Integer indicating the maximum number of mismatches accepted when searching for the primer sequence
-#' @param barcodes.file.path Path to the file containing the cell barcodes detected in the experiment
 #' @param wt.sequence Character vector of length one specifying the expected wild-type sequence
 #' @param mut.sequence Character vector of length one specifying the expected mutant sequence
 #' @param mutation.start Position in which the expected wild-type or mutant sequence starts in the read
 #' @param mutation.end Position in which the expected wild-type or mutant sequence ends in the read
-#' @return Archr Project with added genotyping columns into the metadata
+#' @param max.distance Maximum number of mismatches allowed between barcodes and whitelist
+#' @return output Datatable with barcode and genotype calls
 #'
-#'
-#'
-MutationCalling = function(out = "/path_to_filtered_fastqs/",
-						   barcodes.file.path = "/path_to_singlecell.csv",
-                           wt.max.mismatch = 0,
-                           mut.max.mismatch = 0,
-                           keep.raw.reads = F,
-                           ncores = 1,
-                           reverse.complement = T,
-                           testing = F,
-                           which.read = "R1",
-                           primer.sequence = "CCTCATCATCCTCCTTGTC",
-                           primed.max.mismatch = 3,
-                           wt.sequence =  "CGG",
-                           mut.sequence = "CAG",
-                           mutation.start = 31,
-                           mutation.end = 34
-){
+MutationCalling <- function(out = "/path_to_filtered_fastqs/", barcodes.file.path = "/path_to_whitelist/whitelist.txt",
+                            wt.max.mismatch = 0, mut.max.mismatch = 0, ncores = 1, reverse.complement = TRUE,
+                            testing = FALSE, which.read = "R1", wt.sequence = "CGG", mut.sequence = "CAG",
+                            mutation.start = 31, mutation.end = 34, max.distance = 2) {
 
-  options(expressions = 2.5e5) # Increase the number of nested expressions to be evaluated. Limit is 5e5.
-
-  WhiteListMatch <- WTcount <- MUTcount <- WT <- MUT <- NULL # To prevent non-declared global variables
-  message("------- BEGIN MUTATION CALLING FUNCTION -------")
-
-  if(!file.exists(barcodes.file.path)){
-    stop(paste0("---> barcodes is not available in ",barcodes.file.path," <---"))
+  # make output file
+  out_file <- paste0(out, "out.log")
+  # get chunk name
+  chunk_name <- basename(out)
+  cat(paste0("------- BEGIN MUTATION CALLING ", chunk_name ," -------"), file=out_file,sep="\n")
+  # Load whitelist from the specified file path
+  whitelist <- load_whitelist(barcodes.file.path)
+  # remove "NO_BARCODE" from whitelist
+  whitelist <- whitelist[whitelist != "NO_BARCODE"]
+  # Load FASTQ files
+  fastq_data <- read_and_process_fastq(out, pattern = ".fastq.gz", ncores = ncores)
+  if (testing) fastq_data <- subset_for_testing(fastq_data, max_reads = 10000, ncores = ncores)
+  cat(paste0("------- FASTQ FILES LOADED ", chunk_name ," -------"), file=out_file, sep = "\n", append=TRUE)
+  # Process sequences
+  barcodes <- fastq_data[[grep(names(fastq_data), pattern = "_R2_")]]
+  reads <- fastq_data[[grep(names(fastq_data), pattern = paste0("_", which.read, "_"))]]
+  # reverse complement and convert to dnastringset
+  if (reverse.complement) {
+    barcodes <- lapply(barcodes, function(x) reverseComplement(DNAStringSet(x)))
+    cat(paste0("------- ", chunk_name ," CELL BARCODES HAVE BEEN REVERSE COMPLEMENTED -------"), file=out_file, sep = "\n", append=TRUE)
   }
-  fastq.files = as.list(dir(path = out, pattern = ".fastq.gz"))
-  if(length(fastq.files) == 0){
-    stop("---> No fastq files detected in folder <---")
-  }
-
-  fastq.files.sequences = mclapply(fastq.files, function(x){
-    temp = readFastq(dirPath = out, pattern = x)
-    as.data.frame(sread(temp))
-  }, mc.cores = ncores)
-  names(fastq.files.sequences) = unlist(fastq.files)
-
-  message("------- FASTQ FILES LOADED -------")
-
-  # Subset fastq files for testing
-  if(testing == T){
-    fastq.files.sequences = mclapply(fastq.files.sequences, function(x){
-      if(dim(x)[1] > 1000){
-        x = as.data.frame(x[1:1000,])
-      }else{
-        x = as.data.frame(x)
-      }
-    }, mc.cores = ncores)
-    names(fastq.files.sequences) = unlist(fastq.files)
-    message("------- FASTQ FILES SUBSAMPLED TO 1K READS FOR TESTING -------")
-  }
-
-  # Extract sequences from fastq files
-  barcodes= fastq.files.sequences[grep(names(fastq.files.sequences), pattern = "_R2_")]
-  R1.sequence = fastq.files.sequences[grep(names(fastq.files.sequences), pattern = "_R1_")]
-  R2.sequence = fastq.files.sequences[grep(names(fastq.files.sequences), pattern = "_R3_")]
-  message("------- SEQUENCES OBTAINED FROM FASTQ FILES -------")
-
-  # Read in data and generate sample data frame
-  sample.S.index = as.list(unique(mclapply(strsplit(names(fastq.files.sequences), "_"), function(x) paste0(x[1:(length(x)-3)], collapse = "_"), mc.cores = ncores)))
-  Output = mclapply(sample.S.index, function(x){
-    data.frame(CB = barcodes[grep(names(barcodes), pattern = x)][[1]]$x,
-               R1 = R1.sequence[grep(names(barcodes), pattern = x)][[1]]$x,
-               R2 = R2.sequence[grep(names(barcodes), pattern = x)][[1]]$x)
-  }, mc.cores = ncores)
-  message("Data merged for each lane...")
-
-  names(Output) = lapply(unique(lapply(strsplit(names(fastq.files.sequences), "_"), function(x) paste0(x[1:(length(x)-3)]))), function(y){
-    y = paste(y, collapse = "_")
-  })
-
-  sample.Name.index = names(Output)
-
-  OutputBind = lapply(sample.Name.index, function(x){
-    if(length(Output[grep(names(Output), pattern = x, value = T)])>1){
-      do.call(rbind,Output[grep(names(Output), pattern = x, value = T)])}else{Output[[grep(names(Output), pattern = x, value = T)]]}
-  })
-  names(OutputBind) = sample.Name.index
-
-  message("------- DATAFRAME FOR EACH SAMPLE GENERATED -------")
-
-  # Identify cell barcodes with primed reads and subset
-  primed.index = mclapply(OutputBind, function(x){
-    temp = vcountPattern(primer.sequence, substr(as.character(x[,which.read]), 0,nchar(primer.sequence)), max.mismatch = primed.max.mismatch, with.indels = FALSE)
-    temp = temp == 1
-    return(temp)
-  }, mc.cores = ncores)
-  names(primed.index) = names(OutputBind)
-
-  Primed.output = lapply(as.list(names(OutputBind)), function(x) OutputBind[[x]][primed.index[[x]],])
-  names(Primed.output) = names(primed.index)
-  message("------- PRIMED READS IDENTIFIED -------")
-  message("number of starting reads = ", nrow(OutputBind[[1]]))
-  message("number of primed reads = ", nrow(Primed.output[[1]]))
-  message("% of primed reads = ", round((nrow(Primed.output[[1]])/nrow(OutputBind[[1]])*100),2))
-
-  # Read whitelist (either 10x whitelist or barcode list from CellRanger ATAC)
-  whitelist = read.csv(barcodes.file.path)
-  if (length(names(whitelist)) == 1){
-	 whitelist = read.csv(barcodes.file.path, header=F)
-     whitelist=as.vector(whitelist)$V1
-  }
-  else {
-  whitelist$barcode = substr(whitelist$barcode, 1,16)
-  whitelist = as.character(whitelist[-1,1])
-  }
-  message("------- BARCODES IDENTIFIED -------")
-
-
-  # Match primed barcodes to whitelist
-  if(reverse.complement){
-    Primed.output = mclapply(Primed.output, function(x){
-      x$CB = as.character(reverseComplement(DNAStringSet(x$CB)))
-      return(x)
-    },mc.cores = ncores)
-    names(Primed.output) = names(primed.index)
-    message("------- WARNING: Cell barcodes (CB) have been reverse complemented due to sequencer used -------")
-  }
-
-  message("------- BARCODE MATCHING BEGINNING -------")
-  Matched.output = lapply(Primed.output, function(y){
-    y$WhiteListMatch = unlist(mclapply(y$CB, function(x){
-      temp = stringdist(x, whitelist, method = "hamming")
-      if(min(temp) > 2){
-        temp = "No Match"
-      }else{
+  cat(paste0("------- STARTING BARCODE MATCHING ", chunk_name ," -------"), file=out_file, sep = "\n", append=TRUE)
+  # check which barcodes are perfect match
+  matched_barcodes_ind <- (as.character(barcodes$x) %in% whitelist)
+  matched_barcodes <- rep(NA, length(matched_barcodes_ind))
+  # add the perfect match barcodes
+  matched_barcodes[matched_barcodes_ind] <- as.character(barcodes$x)[matched_barcodes_ind]
+  non_match_barcodes <- as.character(barcodes$x)[!matched_barcodes_ind]
+  # find which of non perfect match barcodes have too many matches with dist=1
+  matched_barcodes_rann <- rann_matching(barcodes=non_match_barcodes, whitelist = whitelist, order = 1, radius = 2, nearest_neighbors = 2)
+  matched_barcodes_rann2 <- rann_matching(barcodes=non_match_barcodes, whitelist = whitelist, order = 2, radius = 2, nearest_neighbors = 2)
+  # join output of rann
+  rann_both <- cbind(matched_barcodes_rann, matched_barcodes_rann2)
+  # run hamming apply on each row of matched barcodes
+  non_match_barcodes_filt <- unlist(lapply(seq_along(non_match_barcodes), function(i) {
+    hamming_too_many_match(non_match_barcodes[i], rann_both[i,])
+  }))
+  # run hamming on the remaining barcodes
+  too_many_match_ind <- which(non_match_barcodes_filt == "Too many matches")
+  non_match_barcodes_remain <- non_match_barcodes_filt[-too_many_match_ind] # remove those with too many matches to speed computation
+  # find those with more than 2 mismatches
+  matched_barcodes_ham <- amatch(x = non_match_barcodes_remain, table = whitelist, method = "hamming", maxDist = max.distance)
+  non_match_barcodes_remain[is.na(matched_barcodes_ham)] <- "No match" # assign no match
+  # add those with too many matches
+  non_match_barcodes_filt[-too_many_match_ind] <- non_match_barcodes_remain
+  # run complete hamming on remaining barcodes
+  final_ind_remove <- which(non_match_barcodes_filt == "Too many matches" |  non_match_barcodes_filt == "No match")
+  non_match_barcodes_remain <- non_match_barcodes_filt[-final_ind_remove]
+  out = unlist(lapply(non_match_barcodes_remain, function(x){
+    temp = stringdist(x, whitelist, method = "hamming")
+    if(min(temp) > 2){
+        temp = "No match"
+    }else{
         if(sum(temp == 0) == 1) {
-          temp = whitelist[temp==0]
+            temp = whitelist[temp==0]
         }else{
-          if(sum(temp == 1) == 1){
-            temp = whitelist[temp==1]
-          }else{
-            if(sum(temp == 2) == 1){
-              temp = whitelist[temp==2]
+            if(sum(temp == 1) == 1 & max.distance > 0){
+                temp = whitelist[temp==1]
             }else{
-              temp = "Too many matches"
+                if(sum(temp == 2) == 1 & sum(temp == 1) == 0 & max.distance > 1){
+                    temp = whitelist[temp==2]
+                }else{
+                    temp = "Too many matches"
+                }
             }
-          }
         }
-      }
-      return(temp)
-    }, mc.cores = ncores))
-    return(y)
-  })
+    }
+    return(temp)
+  }))
 
-  pre_match_barcodes = nrow(Primed.output[[1]])
-  no_match_barcodes = nrow(Matched.output[[1]][Matched.output[[1]]$WhiteListMatch == "No Match",])
-  too_many_match_barcodes = nrow(Matched.output[[1]][Matched.output[[1]]$WhiteListMatch == "Too many matches",])
-  Matched.output = lapply(Matched.output, function(x) x[!(x$WhiteListMatch %in% c("No Match","Too many matches")),])
-  names(Matched.output) = names(primed.index)
-  post_match_barcodes = nrow(Matched.output[[1]])
+  non_match_barcodes_filt[-final_ind_remove] <- out
+  # combine back with original
+  matched_barcodes[!matched_barcodes_ind] <- non_match_barcodes_filt
+  sink(out_file)
+  cat(paste0("------- BARCODE MATCHING COMPLETED ", chunk_name ," -------"), sep = "\n", append=TRUE)
+  cat(paste0("total number of ", chunk_name ," starting barcodes = ", length(matched_barcodes)), sep = "\n", append=TRUE)
+  end_bc <- length(which(matched_barcodes != "No match" & matched_barcodes != "Too many matches"))
+  cat(paste0("total number of ", chunk_name, " matched barcodes = ", end_bc), sep = "\n", append=TRUE)
+  cat(paste0("% ", chunk_name, " barcode matching = ", round((end_bc/length(matched_barcodes))*100,2)), sep = "\n", append=TRUE)
+  cat(paste0("------- STARTING PER READ GENOTYPING ", chunk_name ," -------"), sep = "\n", append=TRUE)
+  sink()
+  # Genotype reads
+  genotyped_reads <- genotype_reads(reads, wt.sequence, mut.sequence, mutation.start, mutation.end, wt.max.mismatch, mut.max.mismatch, ncores)
+  cat(paste0("------- GENOTYPING COMPLETED ", chunk_name ," -------"), file = out_file, sep = "\n", append=TRUE)
+  cat(paste0("------- SAVING OUTPUT ", chunk_name ," ... -------"), file = out_file, sep = "\n", append=TRUE)
+  # Output processing
+  output <- list(matched_barcodes = matched_barcodes, genotyped_reads = genotyped_reads)
 
-
-  message("------- BARCODE MATCHING DONE -------")
-  message("total number of primed barcodes = ", pre_match_barcodes)
-  message("total number of primed matched barcodes = ", post_match_barcodes)
-  message("% barcode matching = ", round((post_match_barcodes/pre_match_barcodes)*100,2))
-
-  # Search for genotyping information
-
-  Genotyped.output = mclapply(Matched.output, function(x){
-    x$WT = vcountPattern(wt.sequence, substr(as.character(x[,which.read]),start = mutation.start, stop = mutation.end), max.mismatch = wt.max.mismatch, with.indels = FALSE)
-    x$MUT = vcountPattern(mut.sequence, substr(as.character(x[,which.read]),start = mutation.start, stop = mutation.end), max.mismatch = wt.max.mismatch, with.indels = FALSE)
-    x$ReadGenotype = NA
-    x$ReadGenotype[rowSums(cbind(x$WT == 1,x$MUT == 1)) == 2] = "Ambiguous"
-    x$ReadGenotype[rowSums(cbind(x$WT == 0,x$MUT == 0)) == 2] = "No information"
-    x$ReadGenotype[rowSums(cbind(x$WT == 1,x$MUT == 0)) == 2] = "WT"
-    x$ReadGenotype[rowSums(cbind(x$WT == 0,x$MUT == 1)) == 2] = "MUTANT"
-    return(x)
-  }, mc.cores = ncores)
-  names(Genotyped.output) = names(primed.index)
-
-  # Remove unwanted reads
-  Genotyped.output = lapply(Genotyped.output, function(x){
-    x = x[!is.na(x$ReadGenotype),]
-    return(x)
-  })
-  message("Reads genotyping done...")
-
-  # Cell genotyping
-  GoTChA_out_cell = lapply(Genotyped.output, function(x){
-    x = x[,c("WhiteListMatch","WT","MUT","ReadGenotype")]
-    x = x %>% group_by(WhiteListMatch) %>% summarise(WTcount = sum(as.numeric(WT)),
-                                                     MUTcount = sum(as.numeric(MUT)))
-    x = as.data.frame(x)
-    return(x)
-  })
-
-  if(keep.raw.reads == T){
-    output = list(genotyped.barcodes = GoTChA_out_cell,
-                  raw.reads = Primed.output)
-  }else{
-    output = list(genotyped.barcodes = GoTChA_out_cell)
-  }
-  message("DONE!")
+  cat(paste0("------- ", chunk_name ," CHUNK DONE! -------"), file = out_file, sep = "\n", append=TRUE)
   return(output)
 }

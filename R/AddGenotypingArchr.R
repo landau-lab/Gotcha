@@ -104,3 +104,4 @@ AddGenotypingArchr = function(archrProject,
 
   return(archrProject)
 }
+
