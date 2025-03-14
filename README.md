@@ -2,8 +2,19 @@
 
 ### Installation
 The Gotcha R package is currently in beta. To install the release version:
+>if (!require("devtools", quietly = TRUE))
+>  install.packages("devtools")
+>devtools::install_github(repo = "landau-lab/Gotcha")
 
-> devtools::install_github(repo = "landau-lab/Gotcha")
+To install the development version:
+>if (!require("devtools", quietly = TRUE))
+>  install.packages("devtools")
+>devtools::install_github(repo = "landau-lab/Gotcha", repos = "development")
+
+A new version of GoTChA that allows parallel processing with both LSF and SLURM is now available:
+>if (!require("devtools", quietly = TRUE))
+>  install.packages("devtools")
+>devtools::install_github(repo = "landau-lab/Gotcha", repos = "multi_os_compatible")
 
 ### Tutorials (more coming soon...)
 [How to run Gotcha in slurm clusters with parallel computing](https://github.com/landau-lab/Gotcha/blob/development/1%20-%20Running%20Gotcha%20with%20parallel%20computing%20in%20slurm.pdf)
