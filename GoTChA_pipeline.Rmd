@@ -23,9 +23,9 @@ These functions can run for hours - it is recommended to submit as Rscript job i
 
 path <- "/test_path/GoTChA_test/data/"
 
-FastqFiltering(out = path, min.quality = 15, which.read = "R1", ncores = 1, read.region = 15, min.bases= 5)
-
 FastqSplit(path = path, out = path, reads = 5e+05, ncores = 12)
+
+FastqFiltering(out = path, min.quality = 15, which.read = "R1", ncores = 1, read.region = 15, min.bases= 5)
 
 # Run Gotcha with parallel computing: submit one function call (1 core) per fastq chunk
 # this will take a few hours
