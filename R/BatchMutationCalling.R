@@ -79,11 +79,24 @@ BatchMutationCalling = function(out = "/path_to_filtered_fastqs/",
     parameters <- as.list(pars[1,])
     tryCatch({
       if (!file.exists(paste0(out, "mutation_call_", x, ".rds")) & rewrite == FALSE) {
-        mutation_calling <- do.call(MutationCalling, parameters)
-        saveRDS(object = mutation_calling, file = paste0(out, "mutation_call_", x, ".rds"))
+        if (max.distance == 0){
+          mutation_calling <- do.call(MutationCallingExact, parameters)
+          saveRDS(object = mutation_calling, file = paste0(out, "mutation_call_", x, ".rds"))
+        }
+        else {
+          mutation_calling <- do.call(MutationCalling, parameters)
+          saveRDS(object = mutation_calling, file = paste0(out, "mutation_call_", x, ".rds"))
+        }
+
       } else if (rewrite == TRUE) {
-        mutation_calling <- do.call(MutationCalling, parameters)
-        saveRDS(object = mutation_calling, file = paste0(out, "mutation_call_", x, ".rds"))
+          if (max.distance == 0){
+            mutation_calling <- do.call(MutationCallingExact, parameters)
+            saveRDS(object = mutation_calling, file = paste0(out, "mutation_call_", x, ".rds"))
+          }
+          else {
+            mutation_calling <- do.call(MutationCalling, parameters)
+            saveRDS(object = mutation_calling, file = paste0(out, "mutation_call_", x, ".rds"))
+          }
       } else {
         message("CHUNK ", x, " WILL NOT BE REWRITTEN. SKIPPING...")
       }
