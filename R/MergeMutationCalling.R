@@ -22,8 +22,12 @@ MergeMutationCalling = function(out){
   outs.collapse$MUTfraction = (outs.collapse$MUTcount / (outs.collapse$MUTcount + outs.collapse$WTcount))
 
   # remove "Too many match" and "No match" barcodes
-  outs.collapse <- outs.collapse[-which(outs.collapse$matched_barcodes == "Too many matches"),]
-  outs.collapse <- outs.collapse[-which(outs.collapse$matched_barcodes == "No match"),]
+  if (length(which(outs.collapse$matched_barcodes == "Too many matches")) > 0){
+    outs.collapse <- outs.collapse[-which(outs.collapse$matched_barcodes == "Too many matches"),]
+  }
+  if (length(which(outs.collapse$matched_barcodes == "No match")) > 0){
+    outs.collapse <- outs.collapse[-which(outs.collapse$matched_barcodes == "No match"),]
+  }
 
   message("------- COLLAPSE BARCODE METRICS -------")
   message("------- Number of matched barcodes = ", nrow(outs.collapse))
